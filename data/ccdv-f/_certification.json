@@ -1,0 +1,68 @@
+{
+	"code": "CCDV-F",
+	"name": "Claude Certified Developer - Foundations",
+	"vendor": "Anthropic",
+	"description": "Validates the ability to use the Claude API and client SDKs, build agents and workflows, operate Claude Code, write effective prompts, manage context, develop tools and MCP servers, and apply security, evaluation, and model-selection practices.",
+	"exam_question_count": 53,
+	"exam_duration_minutes": 120,
+	"passing_score": 720,
+	"max_score": 1000,
+	"domains": [
+		{
+			"code": "applications-integration",
+			"name": "Applications & Integration",
+			"weight_percentage": 33.1,
+			"sort_order": 1,
+			"description": "Claude API mechanics (messages, tools, streaming, vision, files/PDFs, caching), REST/JSON handling, official SDKs, auth/error handling/retries, batch vs. real-time processing, application architecture and configuration management."
+		},
+		{
+			"code": "model-selection-optimization",
+			"name": "Model Selection & Optimization",
+			"weight_percentage": 16.8,
+			"sort_order": 2,
+			"description": "LLM fundamentals (tokens, context windows, sampling), choosing among Opus/Sonnet/Haiku tiers on quality-latency-cost tradeoffs, prompt caching, extended thinking, cost management."
+		},
+		{
+			"code": "agents-workflows",
+			"name": "Agents & Workflows",
+			"weight_percentage": 14.7,
+			"sort_order": 3,
+			"description": "Workflow vs. agent decision criteria, building agents with the Claude Agent SDK, custom agent loops, tool-use loops, sub-agents, memory/context compaction, orchestration patterns (chaining, routing, orchestrator-worker)."
+		},
+		{
+			"code": "prompt-context-engineering",
+			"name": "Prompt & Context Engineering",
+			"weight_percentage": 11.0,
+			"sort_order": 4,
+			"description": "System prompts, few-shot examples, XML-tagged structure, response prefilling, long-context management, output handling, response validation and defensive parsing."
+		},
+		{
+			"code": "tools-mcps",
+			"name": "Tools & MCPs",
+			"weight_percentage": 10.6,
+			"sort_order": 5,
+			"description": "Tool/function definition with JSON schema, tool_choice control, parallel/sequential tool execution, error handling, MCP server development and deployment, choosing built-in tools vs. custom tools vs. Skills vs. MCP."
+		},
+		{
+			"code": "security-safety",
+			"name": "Security & Safety",
+			"weight_percentage": 8.1,
+			"sort_order": 6,
+			"description": "Prompt injection awareness and mitigation, untrusted-input handling, data-leakage prevention, content-policy layering, least-privilege access control, secrets management, tool-misuse prevention, guardrails."
+		},
+		{
+			"code": "claude-code",
+			"name": "Claude Code",
+			"weight_percentage": 3.1,
+			"sort_order": 7,
+			"description": "Terminal-based coding agent fundamentals, CLAUDE.md configuration hierarchy, Rules/Skills/Commands/Agents, interaction modes, session management, workflow integration."
+		},
+		{
+			"code": "eval-testing-debugging",
+			"name": "Eval, Testing & Debugging",
+			"weight_percentage": 2.6,
+			"sort_order": 8,
+			"description": "Systematic output evaluation, debugging techniques, error identification and recovery strategies, isolating failures between integration layers and model output."
+		}
+	]
+}

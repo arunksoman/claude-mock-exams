@@ -1,0 +1,20 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(npm view *)",
+			"Bash(pnpm remove *)",
+			"mcp__svelte__get-documentation",
+			"Bash(xargs grep -l \"interface Row\\\\|interface ResultSet\\\\|interface Client\")",
+			"Bash(pnpm run *)",
+			"Bash(echo \"EXIT: $?\")",
+			"Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
+			"Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/practice)",
+			"Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/exam)",
+			"Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/history)",
+			"Bash(curl -s http://localhost:5173/)",
+			"Bash(node -e ' *)",
+			"Bash(node \"C:\\\\Users\\\\LENOVO\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--claude-certification\\\\53aebe10-ae6e-4d70-a904-f7f475d2516a\\\\scratchpad\\\\analyze.js\")",
+			"Bash(node \"C:\\\\Users\\\\LENOVO\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--claude-certification\\\\53aebe10-ae6e-4d70-a904-f7f475d2516a\\\\scratchpad\\\\test_submit.js\")"
+		]
+	}
+}
