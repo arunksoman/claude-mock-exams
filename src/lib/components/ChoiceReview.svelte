@@ -5,22 +5,27 @@
 
 	interface Props {
 		choices: GradedChoice[];
+		/** When false, only selected choices are marked right/wrong — unselected correct
+		 * choices stay neutral instead of being revealed. Used for the live in-progress
+		 * practice view; the post-session history review keeps the full reveal (default). */
+		revealAll?: boolean;
 	}
 
-	let { choices }: Props = $props();
+	let { choices, revealAll = true }: Props = $props();
 </script>
 
 <div class="review">
 	{#each choices as choice (choice.id)}
+		{@const showCorrect = choice.isCorrect && (revealAll || choice.selected)}
 		<div
 			class="choice"
-			class:correct={choice.isCorrect}
-			class:incorrect={!choice.isCorrect && choice.selected}
+			class:correct={showCorrect}
+			class:incorrect={choice.selected && !choice.isCorrect}
 			class:selected={choice.selected}
 		>
 			<div class="row">
 				<span class="icon">
-					{#if choice.isCorrect}
+					{#if showCorrect}
 						<CircleCheck size={18} strokeWidth={1.75} />
 					{:else if choice.selected}
 						<CircleX size={18} strokeWidth={1.75} />

@@ -103,6 +103,7 @@
 			<ChoiceReview
 				choices={buildGradedQuestion(currentQuestion, session.answers[currentQuestion.id] ?? [])
 					.choices}
+				revealAll={false}
 			/>
 			{#if currentQuestion.explanationHtml}
 				<div class="explanation">
