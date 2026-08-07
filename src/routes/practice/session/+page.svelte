@@ -43,8 +43,11 @@
 
 	function onChoiceChange(next: number[]) {
 		if (!currentQuestion) return;
-		answerPracticeQuestion(currentQuestion.id, next);
-		showReasoning = true;
+		// Multi-select questions need all required picks made before revealing —
+		// otherwise the first click would immediately hide the picker.
+		const complete = next.length >= currentQuestion.selectCount;
+		answerPracticeQuestion(currentQuestion.id, next, complete);
+		if (complete) showReasoning = true;
 	}
 
 	function next() {

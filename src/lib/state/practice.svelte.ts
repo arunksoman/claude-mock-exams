@@ -30,11 +30,15 @@ export function startPracticeSession(config: PracticeConfig, questions: Question
 	persist();
 }
 
-export function answerPracticeQuestion(questionId: number, selectedIds: number[]): void {
+export function answerPracticeQuestion(
+	questionId: number,
+	selectedIds: number[],
+	revealed = true
+): void {
 	const session = practiceState.session;
 	if (!session) return;
 	session.answers[questionId] = selectedIds;
-	session.revealed[questionId] = true;
+	if (revealed) session.revealed[questionId] = true;
 	persist();
 }
 

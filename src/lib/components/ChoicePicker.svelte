@@ -30,7 +30,13 @@
 	function toggle(id: number) {
 		if (disabled) return;
 		if (isMultiple) {
-			selected = selected.includes(id) ? selected.filter((c) => c !== id) : [...selected, id];
+			if (selected.includes(id)) {
+				selected = selected.filter((c) => c !== id);
+			} else if (selected.length < selectCount) {
+				selected = [...selected, id];
+			} else {
+				return;
+			}
 		} else {
 			selected = [id];
 		}
