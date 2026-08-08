@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
-	import { ChevronLeft, ChevronRight, Eye, EyeOff } from '@lucide/svelte';
+	import { ChevronLeft, ChevronRight, Eye, EyeOff, Check } from '@lucide/svelte';
 	import Markdown from '$lib/components/Markdown.svelte';
 	import ChoicePicker from '$lib/components/ChoicePicker.svelte';
 	import ChoiceReview from '$lib/components/ChoiceReview.svelte';
@@ -28,6 +28,7 @@
 	const domain = $derived(
 		currentQuestion ? data.domains.find((d) => d.id === currentQuestion.domainId) : null
 	);
+	const isMultiple = $derived(currentQuestion?.questionType === 'multiple_response');
 
 	let selected = $state<number[]>([]);
 	// Whether the reasoning panel is showing for the current question — separate from
@@ -43,11 +44,22 @@
 
 	function onChoiceChange(next: number[]) {
 		if (!currentQuestion) return;
-		// Multi-select questions need all required picks made before revealing —
-		// otherwise the first click would immediately hide the picker.
-		const complete = next.length >= currentQuestion.selectCount;
-		answerPracticeQuestion(currentQuestion.id, next, complete);
-		if (complete) showReasoning = true;
+		if (isMultiple) {
+			// Multi-select: just persist the picks. Revealing happens only via the
+			// explicit "Check answer" button, so the user can review/change their
+			// selection before committing to see whether it's right.
+			answerPracticeQuestion(currentQuestion.id, next, false);
+		} else {
+			// Single-choice: one click is a complete answer, reveal immediately.
+			answerPracticeQuestion(currentQuestion.id, next, true);
+			showReasoning = true;
+		}
+	}
+
+	function checkAnswer() {
+		if (!currentQuestion) return;
+		answerPracticeQuestion(currentQuestion.id, selected, true);
+		showReasoning = true;
 	}
 
 	function next() {
@@ -122,6 +134,18 @@
 				bind:selected
 				onchange={onChoiceChange}
 			/>
+			{#if isMultiple}
+				<div class="check-answer">
+					<button
+						type="button"
+						class="primary"
+						onclick={checkAnswer}
+						disabled={selected.length !== currentQuestion.selectCount}
+					>
+						<Check size={16} strokeWidth={1.75} /> Check answer
+					</button>
+				</div>
+			{/if}
 		{/if}
 	</div>
 
@@ -187,6 +211,12 @@
 		display: flex;
 		justify-content: flex-end;
 		margin-bottom: var(--space-3);
+	}
+
+	.check-answer {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: var(--space-4);
 	}
 
 	.ghost-btn {
