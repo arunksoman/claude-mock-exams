@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
 
 export const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'intermediate', 'difficult'];
 
-export const PRACTICE_COUNT_PRESETS = [10, 20, 50] as const;
+export const PRACTICE_COUNT_PRESETS = [10, 20, 50, 100] as const;
+
+export const PRACTICE_MAX_COUNT = 100;
 
 export const MAX_HISTORY_ENTRIES = 50;

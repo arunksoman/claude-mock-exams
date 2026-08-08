@@ -1,13 +1,13 @@
 import { json } from '@sveltejs/kit';
-import { getQuestionBank } from '$lib/server/db';
+import { dbClient, getCertMeta } from '$lib/server/db';
 import { sampleExamQuestions } from '$lib/server/examSampler';
 import { shuffle } from '$lib/shuffle';
 import type { QuestionPublic } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async () => {
-	const bank = await getQuestionBank();
-	const sampled = sampleExamQuestions(bank);
+	const { certification, domains } = await getCertMeta();
+	const sampled = await sampleExamQuestions(dbClient, certification, domains);
 
 	// Field-level allowlist: is_correct/reasoning/sortOrder are never selected into this shape
 	// at all, so they're structurally absent from the response — not just hidden by the UI.
@@ -25,7 +25,7 @@ export const POST: RequestHandler = async () => {
 	return json({
 		attemptId: crypto.randomUUID(),
 		startedAt: Date.now(),
-		durationMinutes: bank.certification.examDurationMinutes,
+		durationMinutes: certification.examDurationMinutes,
 		questions
 	});
 };

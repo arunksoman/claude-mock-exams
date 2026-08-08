@@ -1,7 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { getQuestionBank } from '$lib/server/db';
-import { shuffle, shuffleQuestionChoices } from '$lib/shuffle';
-import { DIFFICULTIES } from '$lib/constants';
+import { dbClient, getCertMeta } from '$lib/server/db';
+import { sampleQuestions } from '$lib/server/queries';
+import { shuffleQuestionChoices } from '$lib/shuffle';
+import { DIFFICULTIES, PRACTICE_MAX_COUNT } from '$lib/constants';
 import type { Difficulty, PracticeConfig } from '$lib/types';
 import type { RequestHandler } from './$types';
 
@@ -21,21 +22,28 @@ export const POST: RequestHandler = async ({ request }) => {
 		? body.difficulties.filter((d): d is Difficulty => DIFFICULTIES.includes(d as Difficulty))
 		: [];
 
-	const bank = await getQuestionBank();
+	const { certification } = await getCertMeta();
 
-	let pool = bank.questions;
-	if (domainIds.length > 0) pool = pool.filter((q) => domainIds.includes(q.domainId));
-	if (difficulties.length > 0) pool = pool.filter((q) => difficulties.includes(q.difficulty));
-
-	const shuffled = shuffle(pool);
-	const requestedCount = body.count === 'all' ? shuffled.length : Number(body.count);
-	const count = Math.max(
-		1,
-		Math.min(Number.isFinite(requestedCount) ? requestedCount : 20, shuffled.length)
+	const requestedCount = Number(body.count);
+	// Clamped server-side too — never trust the client's count, even though the UI only
+	// offers presets up to PRACTICE_MAX_COUNT.
+	const limit = Math.min(
+		PRACTICE_MAX_COUNT,
+		Math.max(1, Number.isFinite(requestedCount) ? requestedCount : 20)
 	);
+
+	// Sampling happens entirely in SQL (ORDER BY RANDOM() LIMIT, filtered by domain/difficulty)
+	// — never loads the full question bank into memory, so cost scales with what's requested,
+	// not with total bank size.
+	const sampled = await sampleQuestions(
+		dbClient,
+		{ certificationId: certification.id, domainIds, difficulties },
+		limit
+	);
+
 	// Source data lists the correct choice first (sort_order 0) — shuffle per-question so
 	// answer position isn't a giveaway and repeat practice doesn't always show the same order.
-	const questions = shuffled.slice(0, count).map(shuffleQuestionChoices);
+	const questions = sampled.map(shuffleQuestionChoices);
 
 	const config: PracticeConfig = { domainIds, difficulties, count: questions.length };
 

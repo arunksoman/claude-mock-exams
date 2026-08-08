@@ -10,7 +10,7 @@
 
 	let selectedDomains = $state<number[]>(untrack(() => data.domains.map((d) => d.id)));
 	let selectedDifficulties = $state<Difficulty[]>([...DIFFICULTIES]);
-	let count = $state<number | 'all'>(20);
+	let count = $state<number>(20);
 	let loading = $state(false);
 	let errorMsg = $state('');
 
@@ -109,14 +109,6 @@
 					{preset}
 				</button>
 			{/each}
-			<button
-				type="button"
-				class="chip"
-				class:checked={count === 'all'}
-				onclick={() => (count = 'all')}
-			>
-				All
-			</button>
 		</div>
 	</section>
 

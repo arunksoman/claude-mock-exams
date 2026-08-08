@@ -1,39 +1,41 @@
 import { createClient } from '@libsql/client';
 import { TURSO_URL, TURSO_TOKEN } from '$env/static/private';
-import type { Certification, Domain, QuestionFull } from '$lib/types';
+import type { Certification, Domain } from '$lib/types';
 import { DEFAULT_CERT_CODE } from '$lib/constants';
-import { getCertificationByCode, getDomains, getPublishedQuestionsWithChoices } from './queries';
+import { getCertificationByCode, getDomains } from './queries';
 
-export interface QuestionBank {
+export interface CertMeta {
 	certification: Certification;
 	domains: Domain[];
-	questions: QuestionFull[];
 }
 
-const client = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
+export const dbClient = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
 
-let bankPromise: Promise<QuestionBank> | null = null;
+let metaPromise: Promise<CertMeta> | null = null;
 
 /**
- * Caches the full question bank in module scope for the lifetime of the server process
- * (valid because adapter-node runs one long-lived process) to avoid re-querying Turso,
- * whose free tier meters row reads, on every practice/exam request.
+ * Cheap fetch (certification row + 8 domain rows) — used by the root layout, which runs on
+ * every page load/navigation, and by anything else that just needs cert/domain metadata.
+ *
+ * Nothing in this app loads the full question bank into memory: practice sampling
+ * (`$lib/server/queries.ts#sampleQuestions`) and exam sampling (`$lib/server/examSampler.ts`)
+ * both query only the rows they actually need via `ORDER BY RANDOM() LIMIT n`, and exam
+ * grading (`getQuestionsByIds`) fetches only the specific question ids being graded. Turso
+ * row-read cost stays proportional to what's used per request, not to total bank size — so
+ * it doesn't grow as more questions are added later.
  */
-export function getQuestionBank(certCode: string = DEFAULT_CERT_CODE): Promise<QuestionBank> {
-	if (!bankPromise) {
-		bankPromise = loadQuestionBank(certCode).catch((err) => {
-			bankPromise = null;
+export function getCertMeta(certCode: string = DEFAULT_CERT_CODE): Promise<CertMeta> {
+	if (!metaPromise) {
+		metaPromise = loadCertMeta(certCode).catch((err) => {
+			metaPromise = null;
 			throw err;
 		});
 	}
-	return bankPromise;
+	return metaPromise;
 }
 
-async function loadQuestionBank(certCode: string): Promise<QuestionBank> {
-	const certification = await getCertificationByCode(client, certCode);
-	const [domains, questions] = await Promise.all([
-		getDomains(client, certification.id),
-		getPublishedQuestionsWithChoices(client, certification.id)
-	]);
-	return { certification, domains, questions };
+async function loadCertMeta(certCode: string): Promise<CertMeta> {
+	const certification = await getCertificationByCode(dbClient, certCode);
+	const domains = await getDomains(dbClient, certification.id);
+	return { certification, domains };
 }
