@@ -223,6 +223,14 @@
 		min-height: 100%;
 	}
 
+	/* The Fullscreen API detaches this element from the page layout's <main>,
+	   which normally provides the page's padding — without this it renders
+	   flush against the screen edges. */
+	.exam:fullscreen {
+		padding: var(--space-6) var(--space-6) var(--space-8);
+		overflow-y: auto;
+	}
+
 	.toolbar {
 		display: flex;
 		align-items: center;
