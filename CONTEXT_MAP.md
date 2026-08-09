@@ -272,8 +272,73 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   `exam/active/+page.svelte`) is collapsible and defaults collapsed under
   720px so it doesn't push the current question below the fold on a phone.
 
+## Admin (`/admin`)
+
+A single-admin content-upload surface — not a general CMS. Auth is
+intentionally minimal ("for now," per the original ask): credentials come
+straight from env vars, no user table, no password hashing/rotation, no
+rate-limiting/lockout on failed attempts.
+
+- **Credentials**: `.env`'s `ADMIN_USER` / `ADMIN_PASS` (plain values, compared
+  with a fixed-length SHA-256 hash + `timingSafeEqual` in
+  `$lib/server/adminAuth.ts` to avoid a length/content timing side-channel —
+  not because the threat model here is high, just because it's free).
+- **Session**: a stateless, self-verifying signed cookie
+  (`ccdvf_admin_session`, 12h TTL) — `${expiresAt}.${hmac}` where the HMAC key
+  is `.env`'s `ADMIN_SESSION_SECRET` (separate from the login password so the
+  signing key isn't also the guessable credential). No server-side session
+  store, which matters here for the same reason the old full-bank cache
+  didn't work (see Frontend section above): module-scope state doesn't
+  reliably survive across Vercel serverless invocations, so a real session
+  store would need external storage anyway — a signed cookie sidesteps that
+  entirely.
+- **The auth guard lives in `src/hooks.server.ts`, not a `+layout.server.ts`
+  load function** — this is deliberate and load-bearing. SvelteKit's own docs
+  confirm `handle` runs _before_ a form action is invoked, while a layout's
+  `load` only runs _after_ an action's side effects, to render the resulting
+  page. A guard in `load` would not stop an unauthenticated `POST` straight
+  to `/admin?/upload` from executing first. Verified directly: an
+  unauthenticated POST to the upload action returns SvelteKit's
+  redirect-result JSON with no `uploadResult` in it, and a DB check
+  afterward confirmed zero rows were written.
+- **Upload flow** (`/admin`, form actions in `+page.server.ts`,
+  `$lib/server/adminImport.ts`): accepts a `.jsonl` file (one question object
+  per line, same shape as `data/ccdv-f/*.jsonl` / `scripts/import.py`'s
+  format), 10MB cap. Every line is parsed and validated up front using the
+  _same rules as `scripts/import.py`_ (domain code must exist, valid
+  type/difficulty, ≥2 choices, correct-count matches `select`,
+  `single_choice`⇒select=1, `multiple_response`⇒select≥2, etc.) — **if any
+  line fails, nothing is written at all**, so a partially-bad file can never
+  half-corrupt the bank. On success, all writes for the file happen in one
+  `client.transaction('write')`.
+  - **Upsert semantics** (this is where it differs from `import.py`, which is
+    insert-only and errors on a duplicate `external_key`): a question with a
+    matching `external_key` is updated in place — its fields are overwritten
+    and its choices are deleted and re-inserted from the upload — which is
+    what makes this useful as a _correction_ workflow, not just an
+    additive one. Questions without an `external_key` are always inserted as
+    new, matching `import.py`.
+  - Topics and tags are get-or-created the same way `import.py` does
+    (scoped to `domain_id` for topics, global for tags).
+  - Verified end-to-end against live Turso: create, update-in-place (old
+    choices fully replaced, not accumulated), and atomic rejection (one bad
+    line in an otherwise-valid file writes zero rows) all behave as
+    documented above.
+- **Not built**: editing/deleting individual questions through the UI,
+  picking a certification (hardcoded to `DEFAULT_CERT_CODE`, fine while
+  CCDV-F is the only one), any audit log of who uploaded what.
+
 ## Deployment (Vercel)
 
+- **Env vars required on Vercel** (Project Settings → Environment Variables):
+  `TURSO_URL`, `TURSO_TOKEN`, and — since the Admin feature was added —
+  `ADMIN_USER`, `ADMIN_PASS`, `ADMIN_SESSION_SECRET`. All five are
+  `$env/static/private`, which Vite resolves at **build time**: if any is
+  missing when Vercel builds, the build fails outright rather than the app
+  running with a broken admin login — a missing var here is a hard blocker,
+  not a silent runtime bug. These three admin vars were added locally
+  (`.env`) but have **not** been pushed to Vercel's dashboard as part of this
+  work — that's a manual step still owed before the next deploy.
 - **Adapter**: `@sveltejs/adapter-auto` (not `adapter-node` — that produces a
   standalone Node server in `build/`, which isn't Vercel-compatible and causes
   a "No Output Directory named 'public'" build error). In Vercel's project
