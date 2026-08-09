@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Upload, LogOut, CircleCheck, CircleAlert } from '@lucide/svelte';
+	import { asset } from '$app/paths';
+	import { Upload, LogOut, CircleCheck, CircleAlert, FileDown } from '@lucide/svelte';
 
 	let { data, form } = $props();
 
@@ -52,6 +53,10 @@
 		in place (choices replaced); questions without one are always inserted as new. If any line fails validation,
 		nothing is written.
 	</p>
+	<a class="sample-link" href={asset('/sample-questions.jsonl')} download>
+		<FileDown size={14} strokeWidth={1.75} />
+		Download sample .jsonl (single_choice + multiple_response examples)
+	</a>
 
 	<form
 		method="POST"
@@ -209,6 +214,20 @@
 		border-radius: 4px;
 		padding: 0.1em 0.35em;
 		font-size: 0.92em;
+	}
+
+	.sample-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		font-size: 0.84rem;
+		color: var(--accent);
+		text-decoration: none;
+		margin-bottom: var(--space-5);
+	}
+
+	.sample-link:hover {
+		text-decoration: underline;
 	}
 
 	form {
