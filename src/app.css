@@ -218,6 +218,16 @@ button {
 	white-space: nowrap;
 }
 
+@media (max-width: 640px) {
+	/* Small screens: wrap cell text instead of forcing horizontal scroll for every table —
+	   .table-scroll's overflow-x:auto stays as a fallback for tables still too wide after wrapping. */
+	.markdown th,
+	.markdown td {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+}
+
 .markdown thead th {
 	background: var(--surface-hover);
 	color: var(--text-secondary);
@@ -274,6 +284,7 @@ dfn.term:focus::after {
 /* --- Notes: Mermaid diagrams -------------------------------------------- */
 
 .markdown pre.mermaid {
+	position: relative;
 	background: var(--surface);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
@@ -285,6 +296,32 @@ dfn.term:focus::after {
 	color: var(--text-secondary);
 	font-size: 0.85rem;
 	white-space: pre-wrap;
+}
+
+/* Expand-to-full-view button, appended by NotesDomain.svelte's runMermaid() after each
+   diagram renders — a real DOM element outside Svelte's template, so it's styled here
+   globally rather than in the component's scoped <style>. */
+.markdown pre.mermaid .mmd-expand {
+	position: absolute;
+	top: var(--space-2);
+	right: var(--space-2);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--border);
+	background: color-mix(in srgb, var(--surface) 85%, transparent);
+	color: var(--text-secondary);
+	cursor: pointer;
+	z-index: 2;
+}
+
+.markdown pre.mermaid .mmd-expand:hover {
+	background: var(--surface);
+	color: var(--text);
+	border-color: var(--accent);
 }
 
 .markdown pre.mermaid svg {

@@ -49,24 +49,91 @@ accuracy = sum(
 ) / len(test_tweets)
 ```
 
-- Other code-based techniques: **cosine similarity** on embeddings (semantic consistency across paraphrases), **ROUGE-L** (summarization/content overlap).
-- **LLM-as-judge graders** — ask a separate model call to score the output against a rubric. Typical patterns: binary (yes/no — e.g. "does this contain PHI?"), Likert scale (1-5 — e.g. tone/empathy), or ordinal (context utilization).
+- A single exact-match boolean is a **pass/fail cliff** — it can't tell you "close but missing one field" from "completely wrong." For structured outputs, score each criterion separately instead:
 
 ```python
-def evaluate_likert(model_output, target_tone):
-    prompt = f"""Rate this response 1-5 for being {target_tone}:
-    <response>{model_output}</response>
-    1: Not at all {target_tone}
-    5: Perfectly {target_tone}
-    Output only the number."""
-    response = client.messages.create(
-        model="claude-opus-5", max_tokens=50,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return int(response.content[0].text.strip())
+import json
+
+def evaluate_rubric(model_output: str, expected: dict) -> dict:
+    """Rubric-based grader for a structured JSON extraction task.
+    Scores each criterion independently instead of a single pass/fail,
+    so a near-miss doesn't look identical to a total failure."""
+    results = {"parses_as_json": False, "has_all_fields": False,
+               "values_match": False, "no_extra_fields": False}
+    try:
+        parsed = json.loads(model_output)
+    except (json.JSONDecodeError, TypeError):
+        return results  # can't score further criteria if it doesn't even parse
+
+    results["parses_as_json"] = True
+    results["has_all_fields"] = set(expected.keys()) <= set(parsed.keys())
+    results["values_match"] = all(parsed.get(k) == v for k, v in expected.items())
+    results["no_extra_fields"] = set(parsed.keys()) <= set(expected.keys())
+    results["score"] = sum(v for v in results.values() if isinstance(v, bool)) / 4
+    return results
 ```
 
-> **Gotcha:** Prefer using a **different model** for grading than the one that generated the output — grading with the same model instance risks self-serving bias (a model rating its own work favorably). Encouraging the judge model to reason/think before outputting a score also measurably improves grading accuracy on complex judgments.
+> **In practice:** Store the *per-criterion* breakdown, not just the aggregate `score` — when a regression appears, "`has_all_fields` dropped from 98% to 80%" tells you exactly what broke, while a single blended number just tells you *something* did.
+
+- Other code-based techniques: **cosine similarity** on embeddings (semantic consistency across paraphrases), **ROUGE-L** (summarization/content overlap).
+- **LLM-as-judge graders** — ask a separate model call to score the output against a rubric. Typical patterns: binary (yes/no — e.g. "does this contain PHI?"), Likert scale (1-5 — e.g. tone/empathy), or ordinal (context utilization). A real judge prompt should give the rubric explicitly, and ask for reasoning *before* the score:
+
+```text
+You are grading a customer-support reply for empathy and correctness.
+
+<task>
+Customer message: {customer_message}
+Agent reply: {model_output}
+</task>
+
+<rubric>
+1 (poor): dismissive, inaccurate, or ignores the customer's issue
+3 (adequate): factually correct but flat/impersonal tone
+5 (excellent): accurate, warm, and directly addresses the concern
+</rubric>
+
+First, in <reasoning> tags, note in one or two sentences what the reply gets
+right or wrong against the rubric above.
+Then output your final judgment in <score> tags as a single integer 1-5.
+```
+
+```python
+import re
+
+def evaluate_with_reasoning(client, customer_message, model_output, target_tone="empathetic"):
+    prompt = f"""You are grading a customer-support reply for {target_tone}ness and correctness.
+
+<task>
+Customer message: {customer_message}
+Agent reply: {model_output}
+</task>
+
+<rubric>
+1 (poor): dismissive, inaccurate, or ignores the customer's issue
+3 (adequate): factually correct but flat/impersonal tone
+5 (excellent): accurate, warm, and directly addresses the concern
+</rubric>
+
+First, in <reasoning> tags, note in one or two sentences what the reply gets
+right or wrong against the rubric above.
+Then output your final judgment in <score> tags as a single integer 1-5."""
+
+    response = client.messages.create(
+        model="claude-opus-5", max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = "".join(b.text for b in response.content if b.type == "text")
+    reasoning = re.search(r"<reasoning>(.*?)</reasoning>", text, re.S)
+    score = re.search(r"<score>\s*(\d)\s*</score>", text)
+    return {
+        "score": int(score.group(1)) if score else None,
+        "reasoning": reasoning.group(1).strip() if reasoning else None,
+    }
+```
+
+> **In practice:** Judge calls add real cost and latency at eval-set scale (hundreds or thousands of graded examples per run) — a cheaper, faster model (e.g. **Claude Haiku**) is often good enough as a judge even when a stronger model generated the output being graded. Cache the rubric/instructions portion of the judge prompt with **prompt caching** if you're grading many outputs against the same rubric in a run.
+
+> **Gotcha:** Prefer using a **different model** for grading than the one that generated the output — grading with the same model instance risks self-serving bias (a model rating its own work favorably). Encouraging the judge model to reason/think before outputting a score, as above, also measurably improves grading accuracy on complex judgments.
 
 - **Human review** — the gold standard, but slow and expensive. Reserve it for: validating that your automated graders actually agree with human judgment, spot-checking a sample of automated grades, and genuinely ambiguous or high-stakes cases (legal, medical, safety-critical).
 
@@ -102,12 +169,42 @@ for block in response.content:
     print(block.type, "->", block)
 ```
 
-- **Check token usage and truncation.** A truncated response can look like a "wrong" or "incomplete" answer when it's actually just cut off.
-  - `stop_reason == "max_tokens"` — hit your requested output cap; raise `max_tokens` or continue the response.
-  - `stop_reason == "model_context_window_exceeded"` — filled the model's *context window*, not just your token cap; the response is valid but limited — compact or shorten the conversation.
-  - `stop_reason == "refusal"` — the model (or a safety classifier) declined; inspect `stop_details.category` before assuming a generic failure.
+- **`usage` fields worth checking beyond just token counts:** `usage.input_tokens` / `usage.output_tokens` are the raw counts; if you use prompt caching, `usage.cache_read_input_tokens` and `usage.cache_creation_input_tokens` tell you whether the cache actually hit. A `cache_read_input_tokens` of `0` when you expected a hit is a strong signal your cached prefix changed — even a single-token edit earlier in the prompt invalidates the whole cached block.
+- **Check token usage and truncation.** A truncated response can look like a "wrong" or "incomplete" answer when it's actually just cut off. The full set of `stop_reason` values:
+
+| `stop_reason` | Meaning |
+|---|---|
+| `end_turn` | Claude finished naturally — the normal, healthy case |
+| `max_tokens` | Hit your requested `max_tokens` cap — response is likely truncated |
+| `stop_sequence` | Claude emitted one of your custom `stop_sequences` — check the `stop_sequence` field for which one |
+| `tool_use` | Claude is calling a tool — run it and send back a `tool_result` |
+| `pause_turn` | A long-running server-tool loop hit its turn limit — send the content back to let it continue |
+| `refusal` | The model (or a safety classifier) declined — inspect `stop_details` before assuming a generic failure |
+| `model_context_window_exceeded` | Response filled the model's *context window*, not just your token cap — valid but limited; compact or shorten the conversation |
 
   > **Gotcha:** Stop reasons like `max_tokens` and `refusal` are **not HTTP errors** — you get a normal `200 OK`. If your code only checks for exceptions, a silently truncated or refused response will sail through unnoticed. Always inspect `stop_reason` explicitly.
+
+- **React to truncation, not just detect it.** Detecting `max_tokens` is only half the job — a real pipeline should retry with more headroom (capped, so a genuinely oversized task doesn't retry forever):
+
+```python
+def get_completion_with_headroom(client, messages, tools=None, max_tokens=1024, retries=2):
+    """Reacts to truncation instead of silently returning a cut-off response."""
+    for attempt in range(retries + 1):
+        response = client.messages.create(
+            model="claude-opus-5", max_tokens=max_tokens,
+            messages=messages, tools=tools or [],
+        )
+        if response.stop_reason != "max_tokens":
+            return response
+        if attempt == retries:
+            raise RuntimeError(
+                f"Still truncated after {retries} retries at max_tokens={max_tokens}"
+            )
+        max_tokens *= 2  # give it more room and try again
+    return response
+```
+
+  > **In practice:** Doubling `max_tokens` blindly can quietly balloon cost on a request that's truncating for a structural reason (e.g. Claude stuck in a repetitive loop) rather than a genuinely too-small cap — always cap the retry count, and log when this path fires so a real pattern shows up in your metrics instead of hiding inside a "successful" retried call.
 
 - **Compare across model versions.** When behavior looks wrong, run the *identical* request against a different model (or model version) to see whether the issue is model-specific (a capability gap, a known behavioral quirk) or present everywhere (more likely your prompt/schema).
 - **Use `temperature=0` (or low `effort`) for determinism when debugging.** Sampling randomness makes a bug look intermittent when it's really deterministic-but-rare, or vice versa.
@@ -171,7 +268,37 @@ flowchart LR
 ### Graceful recovery strategies
 
 - **Retries** — for transient, retryable failures (rate limits `429`, server errors `5xx`, network errors): retry with exponential backoff. Don't retry non-retryable errors (`400`, `401`, `404`) — retrying a malformed request just repeats the same failure.
-- **Fallback prompts / fallback models** — if a request is refused or fails validation, retry with a simplified prompt, a stricter output format, or a different model tier rather than looping on the same failing request.
+- **Fallback prompts / fallback models** — if a request is refused or fails validation, retry with a simplified prompt, a stricter output format, or a different model tier rather than looping on the same failing request. A minimal sketch — try the primary model, and only on failure fall back to a different model *and* a simplified prompt, rather than retrying the identical request:
+
+```python
+def generate_with_fallback(client, messages, primary_model, fallback_model):
+    """Try the primary model; on refusal/failure, retry once with a
+    fallback model and a stricter, simplified prompt — not the same
+    request again."""
+    try:
+        response = client.messages.create(
+            model=primary_model, max_tokens=1024, messages=messages,
+        )
+        if response.stop_reason == "refusal":
+            raise ValueError(f"refused: {response.stop_reason}")
+        return response
+    except Exception as primary_error:
+        simplified = messages + [{
+            "role": "user",
+            "content": "Please answer directly and concisely, avoiding any disallowed content.",
+        }]
+        try:
+            return client.messages.create(
+                model=fallback_model, max_tokens=1024, messages=simplified,
+            )
+        except Exception as fallback_error:
+            raise RuntimeError(
+                f"Both models failed: primary={primary_error!r}, fallback={fallback_error!r}"
+            ) from fallback_error
+```
+
+> **In practice:** Be careful what you retry. Retrying the *generation* step is safe, but if the assistant turn already triggered a **tool call with a real side effect** (sent an email, charged a card, wrote a database row) before the failure, blindly re-running the whole loop can repeat that side effect. Either make the tool idempotent (an idempotency key, a dedupe check) or only retry the parts of the pipeline that are provably side-effect-free.
+
 - **Surface a clear error instead of silently failing** — never swallow a bad `stop_reason` or a parse failure and return an empty/default result to the user without logging it. A loud, specific failure is far easier to debug later than a quiet wrong answer.
 - **Validate before you trust.** For tool inputs, JSON outputs, or structured data, parse and validate the model's output before acting on it (e.g., `json.loads()` rather than raw string matching) — this converts silent misbehavior into a catchable exception.
 

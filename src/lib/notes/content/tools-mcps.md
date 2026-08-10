@@ -89,6 +89,66 @@ sequenceDiagram
     A-->>U: Answer
 ```
 
+### A worked example: request, `tool_use`, `tool_result`
+
+Continuing the `get_weather` tool and `tool_choice` request above, Claude's response carries the `tool_use` block your code must act on:
+
+```json
+{
+  "id": "msg_01Aq9w938a90dw8q",
+  "role": "assistant",
+  "content": [
+    { "type": "text", "text": "I'll check the current weather in Paris for you." },
+    {
+      "type": "tool_use",
+      "id": "toolu_01A09q90qw90lq917835lq9",
+      "name": "get_weather",
+      "input": { "location": "Paris, France", "unit": "celsius" }
+    }
+  ],
+  "stop_reason": "tool_use"
+}
+```
+
+You execute `get_weather`, then send a new request with the *entire* history so far plus a `tool_result` for that `tool_use.id`:
+
+```json
+{
+  "model": "claude-opus-5",
+  "max_tokens": 1024,
+  "tools": [ /* same tools array as the original request */ ],
+  "messages": [
+    { "role": "user", "content": "What's the weather in Paris?" },
+    {
+      "role": "assistant",
+      "content": [
+        { "type": "text", "text": "I'll check the current weather in Paris for you." },
+        {
+          "type": "tool_use",
+          "id": "toolu_01A09q90qw90lq917835lq9",
+          "name": "get_weather",
+          "input": { "location": "Paris, France", "unit": "celsius" }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01A09q90qw90lq917835lq9",
+          "content": "18°C, partly cloudy, light wind from the west."
+        }
+      ]
+    }
+  ]
+}
+```
+
+Claude replies to this second request with `stop_reason: "end_turn"` and a text answer built from the tool result — no further tool call needed.
+
+> **In practice:** the Messages API is stateless — you resend the *entire* message history on every turn, including the assistant's own `tool_use` turn verbatim before your `tool_result` turn. Most SDKs (or the Tool Runner, below) accumulate this for you; the most common hand-rolled-loop bug is dropping the assistant turn and sending only the `tool_result`, which breaks the `tool_use`/`tool_result` pairing the API expects.
+
 - In a single turn, Claude's response can contain **multiple `tool_use` blocks** — this is **parallel tool use**, and it is **on by default**. Execute them (concurrently, if independent) and return **all** results together.
 - **Formatting rules that the exam loves to test:**
   - All `tool_result` blocks for one assistant turn go into a **single** `user` message — never split across multiple messages.
@@ -182,15 +242,79 @@ graph TB
 }
 ```
 
-- `mcp_servers` declares the connection (URL, name, optional OAuth `authorization_token`); `tools` needs a matching `mcp_toolset` entry (`mcp_server_name` must reference a server you declared) — every declared server must be referenced by exactly one toolset. Per-tool `enabled`/`defer_loading` overrides let you allowlist or denylist individual tools from the server.
-- If you need **resources or prompts**, or a **local/stdio** server, you build (or use) a real MCP client — the Anthropic SDKs ship helper functions (`mcp_message`, `mcp_resource_to_content`, etc.) to convert between MCP types and Claude API types when you drive your own MCP client alongside the Anthropic SDK.
+- `mcp_servers` declares the connection (URL, name, optional OAuth `authorization_token`); `tools` needs a matching `mcp_toolset` entry (`mcp_server_name` must reference a server you declared) — every declared server must be referenced by exactly one toolset.
+- Per-tool control lives on the toolset, not the server entry: `default_config` sets a baseline (`enabled`, `defer_loading`) applied to every tool from that server, and `configs` overrides individual tool names. Precedence, highest to lowest: tool-specific `configs` → set-level `default_config` → system default (`enabled: true`).
 
-### Building a minimal MCP server (Python)
+```json
+{
+  "type": "mcp_toolset",
+  "mcp_server_name": "google-calendar-mcp",
+  "default_config": { "enabled": false },
+  "configs": {
+    "search_events": { "enabled": true },
+    "create_event": { "enabled": true }
+  }
+}
+```
+
+> **In practice:** `default_config.enabled: false` plus an explicit allowlist in `configs` is how you scope a shared or third-party MCP server down to only the tools this particular app should use, without asking the server owner to change anything. The inverse — leave everything enabled and set `enabled: false` on just the destructive tools (`delete_all_events`, `share_calendar_publicly`) — is the standard pattern for a read-mostly assistant you don't fully trust yet.
+
+- When Claude calls a tool through the connector, execution happens **entirely on Anthropic's infrastructure** — you never construct or send a `tool_result`. The response instead carries two connector-specific block types that report what already happened:
+
+```json
+{
+  "type": "mcp_tool_use",
+  "id": "mcptoolu_014Q35RayjACSWkSj4X2yov1",
+  "name": "echo",
+  "server_name": "example-mcp",
+  "input": { "param1": "value1", "param2": "value2" }
+}
+```
+
+```json
+{
+  "type": "mcp_tool_result",
+  "tool_use_id": "mcptoolu_014Q35RayjACSWkSj4X2yov1",
+  "is_error": false,
+  "content": [{ "type": "text", "text": "Hello" }]
+}
+```
+
+> **Exam tip:** don't confuse `mcp_tool_use`/`mcp_tool_result` (MCP connector, server-executed, informational only) with `tool_use`/`tool_result` (client tools, where *you* execute the call and must send a `tool_result` back). If Claude used the connector, your code has nothing to execute — the block pair is just a record of what Anthropic's infrastructure already did.
+
+- If you need **resources or prompts**, or a **local/stdio** server, you build (or use) a real MCP client — the Anthropic SDKs ship helper functions (`mcp_tools`/`async_mcp_tool`, `mcp_message`/`mcp_messages`, `mcp_resource_to_content`, `mcp_resource_to_file`) to convert between MCP types and Claude API types when you drive your own MCP client alongside the Anthropic SDK, typically feeding the result into `client.beta.messages.tool_runner`.
+
+### Building a minimal MCP server: Python
+
+```bash
+# Requires Python 3.10+ and the mcp package (SDK 2.0+)
+uv add "mcp[cli]"
+# or: pip install "mcp[cli]"
+```
 
 ```python
+from typing import Any
+
+import httpx
 from mcp.server import MCPServer
 
 mcp = MCPServer("weather")
+
+NWS_API_BASE = "https://api.weather.gov"
+USER_AGENT = "weather-app/1.0"
+
+
+async def make_nws_request(url: str) -> dict[str, Any] | None:
+    """Make a request to the NWS API with proper error handling."""
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/geo+json"}
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers, timeout=30.0)
+            response.raise_for_status()
+            return response.json()
+        except Exception:
+            return None
+
 
 @mcp.tool()
 async def get_forecast(latitude: float, longitude: float) -> str:
@@ -200,18 +324,146 @@ async def get_forecast(latitude: float, longitude: float) -> str:
         latitude: Latitude of the location
         longitude: Longitude of the location
     """
-    # ... fetch and format forecast ...
-    return "Sunny, 22°C"
+    points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
+    points_data = await make_nws_request(points_url)
+    if not points_data:
+        return "Unable to fetch forecast data for this location."
+
+    forecast_url = points_data["properties"]["forecast"]
+    forecast_data = await make_nws_request(forecast_url)
+    if not forecast_data:
+        return "Unable to fetch detailed forecast."
+
+    period = forecast_data["properties"]["periods"][0]
+    return f"{period['name']}: {period['detailedForecast']}"
+
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
 ```
 
-- The server declares tools with a decorator; the SDK turns Python type hints and the docstring into the tool's schema and description automatically.
-- **stdio servers must never write to stdout** — that corrupts the JSON-RPC message stream. Log via `logging` (which writes to stderr) instead of `print()`. HTTP-based servers don't have this restriction.
-- Deploying/connecting: a host (e.g. Claude Desktop) is configured with a command to launch your server (for stdio) or a URL (for Streamable HTTP); it spins up an MCP client that performs capability discovery, then lists and calls your tools as needed.
+- The `@mcp.tool()` decorator turns the function's **type hints** into `input_schema` and its **docstring** (including the `Args:` section) into `description` and per-argument help — no manual JSON Schema, no request parsing.
+- `MCPServer` is the SDK's current top-level class. Older tutorials and blog posts commonly show `from mcp.server.fastmcp import FastMCP` instead — that's the SDK's earlier name for the same thing (`FastMCP` → `MCPServer`), kept as an alias for backward compatibility.
+- Run it directly with `uv run weather.py` (or `python weather.py`), or launch it straight into the Inspector for interactive testing with `uv run mcp dev weather.py` — see *Testing and debugging* below.
 
-> **Exam tip:** know the three primitives (tools/resources/prompts), the three participants (host/client/server), and the two transports (stdio for local, Streamable HTTP for remote) — these are the bones of most MCP questions.
+> **Gotcha:** on a `stdio` server, anything written to stdout — including a stray `print()` — corrupts the JSON-RPC message stream and breaks the connection. Use the standard `logging` module (writes to stderr) for any diagnostic output; HTTP-based servers don't have this restriction.
+
+### Building a minimal MCP server: TypeScript
+
+```bash
+npm install @modelcontextprotocol/server zod
+```
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/server";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
+import { z } from "zod";
+
+const server = new McpServer({ name: "weather", version: "1.0.0" });
+
+server.registerTool(
+  "get_forecast",
+  {
+    description: "Get weather forecast for a location",
+    inputSchema: z.object({
+      latitude: z.number().min(-90).max(90).describe("Latitude of the location"),
+      longitude: z.number().min(-180).max(180).describe("Longitude of the location"),
+    }),
+  },
+  async ({ latitude, longitude }) => {
+    // ... fetch and format the forecast, same logic as the Python version ...
+    return { content: [{ type: "text", text: "Sunny, 22°C" }] };
+  },
+);
+
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Weather MCP Server running on stdio"); // stderr — stdout is reserved for JSON-RPC
+}
+
+main().catch((error) => {
+  console.error("Fatal error in main():", error);
+  process.exit(1);
+});
+```
+
+- `registerTool` takes the tool name, a `{ description, inputSchema }` config using a **Zod** schema (the SDK converts it to JSON Schema for you), and an async handler returning `{ content: [...] }`.
+
+> **In practice:** the SDK ships two package surfaces from the same [`modelcontextprotocol/typescript-sdk`](https://github.com/modelcontextprotocol/typescript-sdk) repo — the high-level `@modelcontextprotocol/server` package shown above (the current official quickstart's entry point), and the lower-level `@modelcontextprotocol/sdk` package with deep imports like `@modelcontextprotocol/sdk/server/mcp.js` and `@modelcontextprotocol/sdk/client/stdio.js`, which is what older tutorials — and Anthropic's own client-side MCP helper docs — use. Both are actively maintained; match whichever your other imports already assume rather than mixing them.
+
+- Deploying/connecting: a host (Claude Desktop, Claude Code, your own agent) is configured with a **command to launch your server** (for stdio) or a **URL** (for Streamable HTTP); it spins up an MCP client that performs capability discovery, then lists and calls your tools as needed.
+
+### Registering a server with a host
+
+A server is inert until a host knows how to launch or reach it. The config shape is consistent across hosts — a server name, a launch command, and optional environment variables.
+
+**Claude Desktop** reads `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows: `%AppData%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "command": "uv",
+      "args": ["--directory", "/ABSOLUTE/PATH/TO/PARENT/FOLDER/weather", "run", "weather.py"]
+    }
+  }
+}
+```
+
+**Claude Code** reads the same `mcpServers` shape from a project's `.mcp.json` (check it into version control to share with your team), or you can skip hand-editing JSON with the CLI:
+
+```bash
+# Local stdio server — everything after -- is passed to the server untouched
+claude mcp add --env AIRTABLE_API_KEY=YOUR_KEY --transport stdio airtable -- npx -y airtable-mcp-server
+
+# Remote HTTP server
+claude mcp add --transport http notion https://mcp.notion.com/mcp
+
+# List configured servers and their live connection status
+claude mcp list
+```
+
+The resulting `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "airtable": {
+      "command": "npx",
+      "args": ["-y", "airtable-mcp-server"],
+      "env": { "AIRTABLE_API_KEY": "YOUR_KEY" }
+    }
+  }
+}
+```
+
+- An entry with a `url` and no `type` is a configuration error — Claude Code reads **no `type`** as **stdio**, so an HTTP entry needs `"type": "http"` (or `"sse"` / `"ws"`) explicitly.
+- `.mcp.json` supports `${VAR}` and `${VAR:-default}` expansion inside `command`, `args`, `env`, `url`, and `headers`, so a team can share the file without committing secrets.
+- Claude Code prompts for approval before using a project-scoped `.mcp.json` server the first time; local- and user-scoped servers (`claude mcp add --scope local|user`) skip that prompt but are private to you.
+
+> **In practice:** the single most common "my MCP server won't connect" bug is a relative path in `command`/`args` — the host launches your server from its own working directory, not your project's. Use absolute paths (Claude Code also sets `CLAUDE_PROJECT_DIR` in the spawned server's environment, so `process.env.CLAUDE_PROJECT_DIR` / `os.environ["CLAUDE_PROJECT_DIR"]` is a portable alternative), and restart the host after editing its config — neither Claude Desktop nor Claude Code hot-reloads `claude_desktop_config.json` / `.mcp.json` on save.
+
+### Testing and debugging: the MCP Inspector
+
+The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) (`@modelcontextprotocol/inspector`) is the reference tool for exercising a server before wiring it into a full host. One package, three interfaces, all built on `npx` — no install step:
+
+```bash
+# Web UI (default) — launches your server and opens a browser
+npx @modelcontextprotocol/inspector node path/to/server/index.js
+
+# CLI — scriptable, for shells and CI
+npx @modelcontextprotocol/inspector --cli node path/to/server/index.js --method tools/list
+
+# TUI — interactive, terminal-only
+npx @modelcontextprotocol/inspector --tui node path/to/server/index.js
+```
+
+- Point it at any launch command, not just Node — e.g. `npx @modelcontextprotocol/inspector uvx mcp-server-git --repository ~/code/myrepo` for a Python/`uvx`-launched server, or `--server-url https://... --transport http` for a remote server.
+- The Python SDK wraps the same tool: `uv run mcp dev weather.py` (from the `mcp[cli]` extra) launches your `MCPServer` script straight into the Inspector — no separate `npx` invocation needed.
+- For the MCP **connector** (remote, OAuth-authenticated servers called from the Messages API), the Inspector's "Quick OAuth Flow" is also the documented way to mint a test `access_token` to drop into `authorization_token` before you've built real OAuth handling in your app.
+
+> **Exam tip:** the Inspector is a *development/debugging* tool, not part of the MCP protocol itself, and not something an exam scenario would frame as required production infrastructure — know what problem it solves (inspect tools/resources/prompts, replay calls, mint a test OAuth token) rather than its flags.
 
 ---
 
@@ -236,6 +488,9 @@ if __name__ == "__main__":
 - [Tool use overview](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) — tool definitions, client vs. server tools, pricing
 - [Define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools) — `tool_choice` modes, best practices for descriptions, forcing tool use
 - [Handle tool calls](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls) — `tool_result` formatting rules and `is_error` error handling
-- [MCP connector](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector) — calling remote MCP servers directly from the Messages API
+- [MCP connector](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector) — calling remote MCP servers directly from the Messages API, `mcp_toolset` config, client-side helpers
 - [Model Context Protocol — architecture overview](https://modelcontextprotocol.io/docs/2026-07-28/learn/architecture) — hosts/clients/servers, primitives, transports
+- [Build an MCP server](https://modelcontextprotocol.io/docs/2026-07-28/develop/build-server) — official step-by-step server tutorial (Python, TypeScript, Java, Kotlin, C#, Ruby)
+- [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) — testing and debugging MCP servers, web/CLI/TUI clients
+- [Connect Claude Code to tools via MCP](https://code.claude.com/docs/en/mcp) — `.mcp.json`, `claude mcp add`, installation scopes, OAuth
 - [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) — SKILL.md format and progressive disclosure

@@ -34,6 +34,33 @@ Whether you're inside a workflow step or a fully autonomous agent, the mechanica
 - **Multiple tool calls in one turn** are common (parallel tool use) — execute them concurrently and return *all* results together in a single message; splitting them across messages teaches the model to stop batching calls.
 - Always append the model's **full** response content (not just the text) back into conversation history — dropping intermediate blocks (like thinking or tool_use blocks) breaks the next turn.
 
+Concretely, one turn of the loop against the raw Messages API looks like this — this is the shape every implementation (SDK, `tool_runner`, hand-rolled) reduces to underneath:
+
+```python
+response = client.messages.create(
+    model="claude-opus-5",
+    max_tokens=1024,
+    tools=tools,
+    messages=messages,
+)
+messages.append({"role": "assistant", "content": response.content})
+
+if response.stop_reason == "tool_use":
+    tool_results = []
+    for block in response.content:
+        if block.type == "tool_use":
+            result = execute_tool(block.name, block.input)  # YOUR code runs the tool, not the model
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,  # matches this result back to its tool_use request
+                "content": result,
+            })
+    messages.append({"role": "user", "content": tool_results})
+    # send `messages` back to the model again — repeat until stop_reason != "tool_use"
+```
+
+> **In practice:** `execute_tool` is where real systems differ most — it's your dispatch function mapping a tool `name` to actual code (an API call, a DB query, a shell command). A common bug is forgetting to wrap it in a `try/except` so a failing tool crashes the loop instead of coming back as a `tool_result` with `is_error: true`.
+
 ```mermaid
 flowchart TD
     A["Send request to model\n(messages + tools)"] --> B{"stop_reason?"}
@@ -65,18 +92,39 @@ The **[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)** p
 - **Sessions** — maintain context across exchanges; resume or fork a conversation later.
 - **Skills, hooks, slash commands, plugins** — the same extensibility surface as Claude Code itself, loaded from `.claude/` directories.
 
+**Python** — package `claude-agent-sdk` (`pip install claude-agent-sdk`):
+
 ```python
+import asyncio
 from claude_agent_sdk import query, ClaudeAgentOptions
 
-async for message in query(
-    prompt="Find and fix the bug in the auth module",
-    options=ClaudeAgentOptions(allowed_tools=["Read", "Edit", "Bash", "Grep"]),
-):
-    if hasattr(message, "result"):
-        print(message.result)
+async def main():
+    async for message in query(
+        prompt="Find and fix the bug in the auth module",
+        options=ClaudeAgentOptions(allowed_tools=["Read", "Edit", "Bash", "Grep"]),
+    ):
+        if hasattr(message, "result"):
+            print(message.result)
+
+asyncio.run(main())
+```
+
+**TypeScript** — package `@anthropic-ai/claude-agent-sdk` (`npm install @anthropic-ai/claude-agent-sdk`):
+
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+for await (const message of query({
+  prompt: "Find and fix the bug in the auth module",
+  options: { allowedTools: ["Read", "Edit", "Bash", "Grep"] },
+})) {
+  if ("result" in message) console.log(message.result);
+}
 ```
 
 > **Note:** the Agent SDK is a distinct product from the plain Anthropic API's `tool_runner` helper. The `tool_runner` (`client.beta.messages.tool_runner`) automates the request→execute→loop cycle for *tools you define yourself* — no built-in file/bash tools, no context compaction, no sandbox. The Agent SDK is the full Claude Code harness with built-in tools included. Both still leave *deployment* (hosting, infra) to you.
+
+> **In practice:** `query()` starts a **fresh session on every call** — it's built for one-off tasks. For a continuous multi-turn conversation that keeps its own state (as opposed to you re-supplying history), the SDK also exposes a `ClaudeSDKClient` class (Python) / equivalent streaming-input mode (TypeScript). Most Python option fields are snake_case (`allowed_tools`, `permission_mode`, `system_prompt`), but a few multi-word ones deliberately keep their camelCase spelling to match the wire format — `disallowedTools`, `mcpServers` — so don't assume every field follows Python convention when porting a TypeScript example.
 
 ### Building a custom agent loop by hand
 
@@ -137,6 +185,89 @@ else:
 - Sub-agents can be defined **programmatically** (in code, via an `AgentDefinition`-style object with `description`, `prompt`, `tools`, `model`) or **as filesystem-based markdown files** (e.g. `.claude/agents/*.md`). A built-in general-purpose sub-agent is also available without defining anything.
 - The model decides *when* to invoke a sub-agent based on its `description` field — write descriptions that clearly state when to use it, the same way you'd write a good tool description.
 
+### Real subagent file structure
+
+A filesystem-based subagent for Claude Code is just a Markdown file with YAML {{frontmatter|the `---`-delimited metadata block at the top of a Markdown file}} living under `.claude/agents/` (project-scoped) or `~/.claude/agents/` (user-scoped, available in every project):
+
+```
+your-project/
+└── .claude/
+    └── agents/
+        └── code-reviewer.md
+```
+
+The frontmatter is the configuration; the Markdown body below it becomes the subagent's **system prompt**:
+
+```markdown
+---
+name: code-reviewer
+description: Reviews code for quality and best practices. Use proactively after code is written or modified.
+tools: Read, Glob, Grep
+model: sonnet
+---
+
+You are a code reviewer. When invoked, analyze the code and provide
+specific, actionable feedback on quality, security, and best practices.
+```
+
+Only `name` and `description` are required — everything else falls back to sensible defaults. The most commonly used fields:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `name` | Yes | Unique identifier, lowercase letters and hyphens |
+| `description` | Yes | Tells the *main* Claude when to delegate to this subagent — write it the way you'd write a tool description |
+| `tools` | No | Comma-separated allowlist (e.g. `Read, Grep, Glob`). Omit it to inherit every tool available to subagents |
+| `disallowedTools` | No | Denylist instead of an allowlist — removes tools from the inherited/specified set |
+| `model` | No | `sonnet`, `opus`, `haiku`, `fable`, a full model ID, or `inherit` (default) |
+| `permissionMode` | No | `default`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions`, or `plan` |
+
+*A handful of more advanced fields exist beyond this table — `maxTurns`, `skills` (preload skill content), `mcpServers`, `hooks`, `memory` (persistent cross-session notes), `background`, `effort`, `isolation` (run in a git worktree), `color`, `initialPrompt` — worth knowing they exist, not worth memorizing for the exam.*
+
+> **In practice:** Claude Code ships several **built-in** subagents you don't have to define — `Explore` (fast, read-only search), `Plan` (research during plan mode), and `general-purpose` (full tool access for multi-step work) — so a bare "spawn a subagent to look into X" often just works with zero setup. A project or user subagent with the same `name` as a built-in one overrides it.
+
+> **In practice:** as of recent Claude Code versions, subagents run **in the background by default** and the interactive `/agents` creation wizard has been removed — the documented workflow is now "ask Claude to write the `.claude/agents/*.md` file for you" or edit it by hand, not a TUI form.
+
+### Defining subagents programmatically (Agent SDK)
+
+Inside the Agent SDK, pass an `agents` map to `ClaudeAgentOptions` (Python) / the `query()` options (TypeScript) instead of — or in addition to — filesystem files. Each entry is an `AgentDefinition` with the same conceptual fields as the frontmatter above (`description`, `prompt` — this is the body/system-prompt equivalent, `tools`, `model`, plus the advanced fields). Programmatic definitions take precedence over a filesystem agent with the same name.
+
+```python
+from claude_agent_sdk import query, ClaudeAgentOptions, AgentDefinition
+
+options = ClaudeAgentOptions(
+    # Agent must be allowed, since Claude invokes subagents through the Agent tool
+    allowed_tools=["Read", "Grep", "Glob", "Agent"],
+    agents={
+        "code-reviewer": AgentDefinition(
+            description="Expert code review specialist. Use for quality, security, and maintainability reviews.",
+            prompt="You are a code review specialist. Identify security issues, "
+                   "performance problems, and deviations from best practices.",
+            tools=["Read", "Grep", "Glob"],
+            model="sonnet",
+        ),
+    },
+)
+```
+
+```typescript
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+const options = {
+  allowedTools: ["Read", "Grep", "Glob", "Agent"],
+  agents: {
+    "code-reviewer": {
+      description: "Expert code review specialist. Use for quality, security, and maintainability reviews.",
+      prompt: "You are a code review specialist. Identify security issues, " +
+              "performance problems, and deviations from best practices.",
+      tools: ["Read", "Grep", "Glob"],
+      model: "sonnet",
+    },
+  },
+};
+```
+
+> **Gotcha:** forgetting to add `"Agent"` to `allowed_tools`/`allowedTools` is the most common reason a defined subagent never gets invoked — without it, the Agent tool call falls through to your permission callback (or is auto-denied in `dontAsk` mode) instead of running.
+
 ```mermaid
 sequenceDiagram
     participant U as User
@@ -195,6 +326,42 @@ Anthropic's "Building Effective Agents" post names five recurring workflow/agent
 - **Orchestrator-workers** example: a multi-file coding change where the set of files to touch isn't known until the orchestrator investigates.
 - **Evaluator-optimizer** example: iterative literary translation, refined against feedback each round.
 
+**Routing sketch** — a cheap classification step decides which downstream path (system prompt, model, or even a different tool set) handles the request:
+
+```python
+# Illustrative — call_model()/classify() stand in for however you invoke
+# Claude in your stack (client.messages.create, the Agent SDK's query(), etc.)
+def route(user_query: str) -> str:
+    category = classify(user_query)  # fast/cheap model call, or a keyword/regex heuristic
+
+    if category == "billing":
+        return call_model(system=BILLING_SYSTEM_PROMPT, prompt=user_query, model="claude-haiku-5")
+    elif category == "technical":
+        return call_model(system=TECH_SYSTEM_PROMPT, prompt=user_query, model="claude-sonnet-5")
+    else:
+        return call_model(system=GENERAL_SYSTEM_PROMPT, prompt=user_query, model="claude-opus-5")
+```
+
+**Orchestrator-workers sketch** — the orchestrator decides the breakdown at runtime, then fans work out and synthesizes the results:
+
+```python
+# Illustrative shape — in the Agent SDK this maps naturally onto AgentDefinition
+# workers spawned via the `agents` option (see the Sub-agents section above).
+async def orchestrator_workers(task: str) -> str:
+    plan = await call_model_async(system=ORCHESTRATOR_PROMPT, prompt=task)  # e.g. "which files to touch"
+    subtasks = parse_plan(plan)  # decomposition decided at runtime, not hardcoded
+
+    worker_calls = [call_model_async(system=WORKER_PROMPT, prompt=st) for st in subtasks]
+    worker_outputs = await asyncio.gather(*worker_calls)  # fan out, run concurrently
+
+    return await call_model_async(
+        system=SYNTHESIZER_PROMPT,
+        prompt="\n\n".join(worker_outputs),
+    )
+```
+
+> **In practice:** for a handful of workers, hand-rolled fan-out (or the SDK's `agents` option) is enough. For coordinating **dozens to hundreds** of agents, the Agent SDK exposes a `Workflow` tool that moves orchestration into a script the runtime executes outside the conversation's context window — turn-by-turn subagent delegation doesn't scale that far because every worker's result still has to pass back through the orchestrator's own context.
+
 ```mermaid
 flowchart TD
     T["Incoming task"] --> O["Orchestrator LLM\n(plans & delegates)"]
@@ -216,6 +383,7 @@ flowchart TD
 - [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) — the canonical source for workflows vs. agents and the five orchestration patterns
 - [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — compaction, structured note-taking, and sub-agent strategies for long-running agents
 - [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) — what the Claude Agent SDK provides (built-in tools, context management, permissions, sessions, sub-agents)
-- [Subagents in the SDK](https://code.claude.com/docs/en/agent-sdk/subagents) — how to define, invoke, and restrict sub-agents; context-isolation details
+- [Create custom subagents](https://code.claude.com/docs/en/sub-agents) — the full `.claude/agents/*.md` file format, all supported frontmatter fields, scopes, hooks, and memory
+- [Subagents in the SDK](https://code.claude.com/docs/en/agent-sdk/subagents) — how to define subagents programmatically with `AgentDefinition`, invoke and restrict them, and the `Workflow` tool for large-scale fan-out
 - [Tool use overview](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) — the tool-use loop, tool definitions, and handling tool results
 - [Compaction](https://platform.claude.com/docs/en/build-with-claude/compaction) — server-side automatic context compaction on the Messages API
