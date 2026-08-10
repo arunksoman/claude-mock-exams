@@ -156,3 +156,238 @@ button {
 	margin: 0 0 var(--space-2) 0;
 	padding-left: 1.25em;
 }
+
+/* --- Notes: headings, blockquotes, tables --------------------------- */
+
+.markdown h2,
+.markdown h3 {
+	scroll-margin-top: 110px;
+}
+
+.markdown h2 {
+	font-size: 1.05rem;
+	margin: var(--space-6) 0 var(--space-3);
+	padding-top: var(--space-1);
+}
+
+.markdown h2:first-child {
+	margin-top: 0;
+}
+
+.markdown h3 {
+	font-size: 0.95rem;
+	margin: var(--space-5) 0 var(--space-2);
+	color: var(--text);
+}
+
+.markdown blockquote {
+	margin: 0 0 var(--space-3);
+	padding: var(--space-3) var(--space-4);
+	border-left: 3px solid var(--accent);
+	background: var(--accent-soft);
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+	color: var(--text-secondary);
+}
+
+.markdown blockquote p {
+	margin: 0;
+}
+
+.markdown blockquote p + p {
+	margin-top: var(--space-2);
+}
+
+.markdown .table-scroll {
+	overflow-x: auto;
+	margin: 0 0 var(--space-4);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+}
+
+.markdown table {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: 0.88rem;
+}
+
+.markdown th,
+.markdown td {
+	padding: var(--space-2) var(--space-3);
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+	white-space: nowrap;
+}
+
+.markdown thead th {
+	background: var(--surface-hover);
+	color: var(--text-secondary);
+	font-weight: 600;
+}
+
+.markdown tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* --- Notes: hover/tap glossary terms --------------------------------- */
+
+dfn.term {
+	position: relative;
+	font-style: normal;
+	cursor: help;
+	border-bottom: 1px dotted var(--accent);
+	color: inherit;
+}
+
+dfn.term:hover::after,
+dfn.term:focus-visible::after,
+dfn.term:focus::after {
+	content: attr(data-def);
+	position: absolute;
+	left: 0;
+	bottom: calc(100% + 6px);
+	width: max-content;
+	max-width: min(320px, 80vw);
+	white-space: normal;
+	background: var(--text);
+	color: var(--bg);
+	font-size: 0.8rem;
+	line-height: 1.4;
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	box-shadow: var(--shadow-md);
+	z-index: 20;
+}
+
+/* --- Notes: KaTeX ------------------------------------------------------ */
+
+.markdown .katex-block {
+	overflow-x: auto;
+	overflow-y: hidden;
+	margin: var(--space-3) 0 var(--space-4);
+	padding: var(--space-2) 0;
+}
+
+.markdown .katex {
+	font-size: 1.05em;
+}
+
+/* --- Notes: Mermaid diagrams -------------------------------------------- */
+
+.markdown pre.mermaid {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	padding: var(--space-4);
+	margin: 0 0 var(--space-4);
+	overflow-x: auto;
+	display: flex;
+	justify-content: center;
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+	white-space: pre-wrap;
+}
+
+.markdown pre.mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* --- Notes: highlighted code blocks (hljs, theme-mapped) --------------- */
+
+.markdown pre.hljs-block {
+	background: var(--surface-hover);
+	border-radius: var(--radius-sm);
+	padding: var(--space-3);
+	overflow-x: auto;
+	margin: 0 0 var(--space-4);
+}
+
+.markdown pre.hljs-block code {
+	background: none;
+	padding: 0;
+	font-size: 0.85rem;
+}
+
+.markdown .hljs-keyword,
+.markdown .hljs-selector-tag,
+.markdown .hljs-literal,
+.markdown .hljs-section,
+.markdown .hljs-link {
+	color: var(--accent);
+}
+
+.markdown .hljs-string,
+.markdown .hljs-addition,
+.markdown .hljs-attr,
+.markdown .hljs-symbol,
+.markdown .hljs-bullet {
+	color: var(--success);
+}
+
+.markdown .hljs-comment,
+.markdown .hljs-quote,
+.markdown .hljs-deletion,
+.markdown .hljs-meta {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.markdown .hljs-number,
+.markdown .hljs-built_in,
+.markdown .hljs-builtin-name,
+.markdown .hljs-type,
+.markdown .hljs-params {
+	color: var(--danger);
+}
+
+.markdown .hljs-title,
+.markdown .hljs-title.function_,
+.markdown .hljs-title.class_,
+.markdown .hljs-name {
+	color: var(--text);
+	font-weight: 600;
+}
+
+.markdown .hljs-variable,
+.markdown .hljs-template-variable,
+.markdown .hljs-attribute {
+	color: var(--text);
+}
+
+.markdown .hljs-emphasis {
+	font-style: italic;
+}
+
+.markdown .hljs-strong {
+	font-weight: 700;
+}
+
+/* --- Notes: YouTube embeds ---------------------------------------------- */
+
+.markdown .yt-embed {
+	margin: 0 0 var(--space-4);
+}
+
+.markdown .yt-frame {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 16 / 9;
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	background: var(--surface-hover);
+}
+
+.markdown .yt-frame iframe {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+}
+
+.markdown .yt-embed figcaption {
+	margin-top: var(--space-2);
+	font-size: 0.82rem;
+	color: var(--text-muted);
+	text-align: center;
+}

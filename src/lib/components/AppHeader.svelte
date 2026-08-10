@@ -14,7 +14,8 @@
 		{ href: resolve('/'), label: 'Home' },
 		{ href: resolve('/practice'), label: 'Practice' },
 		{ href: resolve('/exam'), label: 'Mock Exam' },
-		{ href: resolve('/history'), label: 'History' }
+		{ href: resolve('/history'), label: 'History' },
+		{ href: resolve('/notes'), label: 'Study Notes' }
 	];
 
 	function isActive(href: string): boolean {
