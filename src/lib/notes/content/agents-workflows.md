@@ -81,7 +81,7 @@ flowchart TD
 
 ### What the Claude Agent SDK gives you out of the box
 
-The **[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)** packages the same harness that powers Claude Code as a library (Python and TypeScript) — you get the agent loop *and* a batteries-included environment around it, not just raw API access.
+The **[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)** packages the same harness that powers Claude Code as a library — you get the agent loop *and* a batteries-included environment around it, not just raw API access. It's available for Python and TypeScript; these notes use Python.
 
 - **Built-in tools** — file read/write/edit, bash execution, web search — ready to use with no implementation work.
 - **The agent loop itself** — planning, calling tools, deciding when a task is done — is handled for you; you don't write the `while` loop.
@@ -92,7 +92,28 @@ The **[Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview)** p
 - **Sessions** — maintain context across exchanges; resume or fork a conversation later.
 - **Skills, hooks, slash commands, plugins** — the same extensibility surface as Claude Code itself, loaded from `.claude/` directories.
 
-**Python** — package `claude-agent-sdk` (`pip install claude-agent-sdk`):
+### Installation
+
+Requires **Python 3.10+**. Two ways to install the `claude-agent-sdk` package:
+
+```bash
+# uv (recommended) — handles the virtual environment for you
+uv init
+uv add claude-agent-sdk
+
+# pip — create/activate a venv first
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
+pip install claude-agent-sdk
+```
+
+Then set an API key in the shell you'll run the agent from — the SDK reads it from the process environment and does **not** load `.env` files automatically:
+
+```bash
+export ANTHROPIC_API_KEY=your-api-key    # Windows PowerShell: $env:ANTHROPIC_API_KEY = "your-api-key"
+```
+
+> **In practice:** you generally do **not** need Node.js or a separate Claude Code install — the Python (and TypeScript) SDK packages bundle a native Claude Code binary, which is what actually drives the agent loop under the hood. The exception is platforms where pip can't get a prebuilt wheel (e.g. ARM64 Windows), where no binary ships and you have to [install Claude Code natively](https://code.claude.com/docs/en/setup) yourself — the SDK then finds it on `PATH`.
 
 ```python
 import asyncio
@@ -109,22 +130,9 @@ async def main():
 asyncio.run(main())
 ```
 
-**TypeScript** — package `@anthropic-ai/claude-agent-sdk` (`npm install @anthropic-ai/claude-agent-sdk`):
-
-```typescript
-import { query } from "@anthropic-ai/claude-agent-sdk";
-
-for await (const message of query({
-  prompt: "Find and fix the bug in the auth module",
-  options: { allowedTools: ["Read", "Edit", "Bash", "Grep"] },
-})) {
-  if ("result" in message) console.log(message.result);
-}
-```
-
 > **Note:** the Agent SDK is a distinct product from the plain Anthropic API's `tool_runner` helper. The `tool_runner` (`client.beta.messages.tool_runner`) automates the request→execute→loop cycle for *tools you define yourself* — no built-in file/bash tools, no context compaction, no sandbox. The Agent SDK is the full Claude Code harness with built-in tools included. Both still leave *deployment* (hosting, infra) to you.
 
-> **In practice:** `query()` starts a **fresh session on every call** — it's built for one-off tasks. For a continuous multi-turn conversation that keeps its own state (as opposed to you re-supplying history), the SDK also exposes a `ClaudeSDKClient` class (Python) / equivalent streaming-input mode (TypeScript). Most Python option fields are snake_case (`allowed_tools`, `permission_mode`, `system_prompt`), but a few multi-word ones deliberately keep their camelCase spelling to match the wire format — `disallowedTools`, `mcpServers` — so don't assume every field follows Python convention when porting a TypeScript example.
+> **In practice:** `query()` starts a **fresh session on every call** — it's built for one-off tasks. For a continuous multi-turn conversation that keeps its own state (as opposed to you re-supplying history), the SDK also exposes a `ClaudeSDKClient` class. Most option fields are snake_case (`allowed_tools`, `permission_mode`, `system_prompt`), but a few multi-word ones deliberately keep camelCase to match the underlying wire format — `disallowedTools`, `mcpServers` — worth noticing since it's an easy typo to make.
 
 ### Building a custom agent loop by hand
 
@@ -229,7 +237,7 @@ Only `name` and `description` are required — everything else falls back to sen
 
 ### Defining subagents programmatically (Agent SDK)
 
-Inside the Agent SDK, pass an `agents` map to `ClaudeAgentOptions` (Python) / the `query()` options (TypeScript) instead of — or in addition to — filesystem files. Each entry is an `AgentDefinition` with the same conceptual fields as the frontmatter above (`description`, `prompt` — this is the body/system-prompt equivalent, `tools`, `model`, plus the advanced fields). Programmatic definitions take precedence over a filesystem agent with the same name.
+Inside the Agent SDK, pass an `agents` map to `ClaudeAgentOptions` instead of — or in addition to — filesystem files. Each entry is an `AgentDefinition` with the same conceptual fields as the frontmatter above (`description`, `prompt` — this is the body/system-prompt equivalent, `tools`, `model`, plus the advanced fields). Programmatic definitions take precedence over a filesystem agent with the same name.
 
 ```python
 from claude_agent_sdk import query, ClaudeAgentOptions, AgentDefinition
@@ -249,24 +257,7 @@ options = ClaudeAgentOptions(
 )
 ```
 
-```typescript
-import { query } from "@anthropic-ai/claude-agent-sdk";
-
-const options = {
-  allowedTools: ["Read", "Grep", "Glob", "Agent"],
-  agents: {
-    "code-reviewer": {
-      description: "Expert code review specialist. Use for quality, security, and maintainability reviews.",
-      prompt: "You are a code review specialist. Identify security issues, " +
-              "performance problems, and deviations from best practices.",
-      tools: ["Read", "Grep", "Glob"],
-      model: "sonnet",
-    },
-  },
-};
-```
-
-> **Gotcha:** forgetting to add `"Agent"` to `allowed_tools`/`allowedTools` is the most common reason a defined subagent never gets invoked — without it, the Agent tool call falls through to your permission callback (or is auto-denied in `dontAsk` mode) instead of running.
+> **Gotcha:** forgetting to add `"Agent"` to `allowed_tools` is the most common reason a defined subagent never gets invoked — without it, the Agent tool call falls through to your permission callback (or is auto-denied in `dontAsk` mode) instead of running.
 
 ```mermaid
 sequenceDiagram

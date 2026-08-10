@@ -44,6 +44,32 @@ pie showData
 > Selection & Optimization — are just under **half the exam** by themselves.
 > If your study time is limited, start there.
 
+## A note on terminology: API vs. SDK
+
+> **Note:** these two terms get used loosely in casual conversation, but the
+> exam (and these notes) distinguish them:
+>
+> - The **Claude API** (also called the **Messages API**) is the underlying
+>   HTTP interface — `POST` a JSON body to `https://api.anthropic.com/v1/messages`
+>   with an `x-api-key` header, get JSON back. Every code example below,
+>   regardless of language, ultimately reduces to this.
+> - The **Python SDK** is Anthropic's official Python package (`anthropic`,
+>   installed via `pip install anthropic`) — a typed client library that
+>   builds that HTTP request for you (`client.messages.create(...)`) and
+>   parses the response into Python objects. **All SDK code examples in these
+>   notes use the Python SDK, consistently**, since it's the most common way
+>   people actually call Claude and switching between languages example-to-
+>   example just adds confusion without adding understanding.
+> - Official SDKs exist for other languages too (TypeScript/JavaScript, Java,
+>   Go, Ruby) — same idea, different syntax. The exam may ask about "the
+>   SDKs" generically (e.g. "SDKs provide typed request/response objects and
+>   built-in retry logic") without expecting you to know a specific
+>   language's exact method names beyond Python.
+> - A few examples below use a raw `curl` request instead of the SDK —
+>   always explicitly labeled — specifically where seeing the literal JSON/
+>   HTTP on the wire (e.g. the raw SSE streaming format) is the point, not
+>   how you'd actually write the code.
+
 ## How to use these notes
 
 - Written **bullet-first**: skim the bullets for the "point to ponder," read

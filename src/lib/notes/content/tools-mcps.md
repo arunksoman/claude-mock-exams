@@ -284,7 +284,7 @@ graph TB
 
 - If you need **resources or prompts**, or a **local/stdio** server, you build (or use) a real MCP client — the Anthropic SDKs ship helper functions (`mcp_tools`/`async_mcp_tool`, `mcp_message`/`mcp_messages`, `mcp_resource_to_content`, `mcp_resource_to_file`) to convert between MCP types and Claude API types when you drive your own MCP client alongside the Anthropic SDK, typically feeding the result into `client.beta.messages.tool_runner`.
 
-### Building a minimal MCP server: Python
+### Building a minimal MCP server
 
 ```bash
 # Requires Python 3.10+ and the mcp package (SDK 2.0+)
@@ -348,49 +348,7 @@ if __name__ == "__main__":
 
 > **Gotcha:** on a `stdio` server, anything written to stdout — including a stray `print()` — corrupts the JSON-RPC message stream and breaks the connection. Use the standard `logging` module (writes to stderr) for any diagnostic output; HTTP-based servers don't have this restriction.
 
-### Building a minimal MCP server: TypeScript
-
-```bash
-npm install @modelcontextprotocol/server zod
-```
-
-```typescript
-import { McpServer } from "@modelcontextprotocol/server";
-import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { z } from "zod";
-
-const server = new McpServer({ name: "weather", version: "1.0.0" });
-
-server.registerTool(
-  "get_forecast",
-  {
-    description: "Get weather forecast for a location",
-    inputSchema: z.object({
-      latitude: z.number().min(-90).max(90).describe("Latitude of the location"),
-      longitude: z.number().min(-180).max(180).describe("Longitude of the location"),
-    }),
-  },
-  async ({ latitude, longitude }) => {
-    // ... fetch and format the forecast, same logic as the Python version ...
-    return { content: [{ type: "text", text: "Sunny, 22°C" }] };
-  },
-);
-
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Weather MCP Server running on stdio"); // stderr — stdout is reserved for JSON-RPC
-}
-
-main().catch((error) => {
-  console.error("Fatal error in main():", error);
-  process.exit(1);
-});
-```
-
-- `registerTool` takes the tool name, a `{ description, inputSchema }` config using a **Zod** schema (the SDK converts it to JSON Schema for you), and an async handler returning `{ content: [...] }`.
-
-> **In practice:** the SDK ships two package surfaces from the same [`modelcontextprotocol/typescript-sdk`](https://github.com/modelcontextprotocol/typescript-sdk) repo — the high-level `@modelcontextprotocol/server` package shown above (the current official quickstart's entry point), and the lower-level `@modelcontextprotocol/sdk` package with deep imports like `@modelcontextprotocol/sdk/server/mcp.js` and `@modelcontextprotocol/sdk/client/stdio.js`, which is what older tutorials — and Anthropic's own client-side MCP helper docs — use. Both are actively maintained; match whichever your other imports already assume rather than mixing them.
+> **Note:** MCP has official SDKs for several languages (TypeScript, Java, Kotlin, C#, Ruby, besides Python) — same protocol, different syntax. These notes stick to Python throughout.
 
 - Deploying/connecting: a host (Claude Desktop, Claude Code, your own agent) is configured with a **command to launch your server** (for stdio) or a **URL** (for Streamable HTTP); it spins up an MCP client that performs capability discovery, then lists and calls your tools as needed.
 

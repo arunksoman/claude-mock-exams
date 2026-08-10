@@ -150,7 +150,7 @@ sequenceDiagram
 
 > **Exam tip:** The exam likes to test that `usage` in `message_delta` is **cumulative**, not a delta-of-tokens-this-event, and that streaming errors can arrive after a 200 status — both are easy to get wrong if you assume streaming behaves like a single failable HTTP call.
 
-> **Gotcha:** Every SDK offers a way to just get the complete message back after consuming a stream internally (`stream.get_final_message()` in Python, `stream.finalMessage()` in TypeScript) — this is the recommended way to use streaming for large `max_tokens` when you don't actually need to render partial output. Don't hand-roll event accumulation unless you need per-token behavior.
+> **Gotcha:** the Python SDK offers a way to just get the complete message back after consuming a stream internally — `stream.get_final_message()` — this is the recommended way to use streaming for large `max_tokens` when you don't actually need to render partial output. Don't hand-roll event accumulation unless you need per-token behavior.
 
 ```python
 with client.messages.stream(
@@ -236,28 +236,6 @@ with client.messages.stream(
             print(f"\nstop_reason={event.delta.stop_reason}  usage={event.usage}")
 
     final_message = stream.get_final_message()
-```
-
-```typescript
-const stream = client.messages.stream({
-  model: "claude-opus-5",
-  max_tokens: 1024,
-  messages: [{ role: "user", content: "What's the weather in San Francisco?" }],
-});
-
-for await (const event of stream) {
-  if (event.type === "content_block_delta") {
-    if (event.delta.type === "text_delta") {
-      process.stdout.write(event.delta.text);
-    } else if (event.delta.type === "input_json_delta") {
-      process.stdout.write(event.delta.partial_json);
-    }
-  } else if (event.type === "message_delta") {
-    console.log(`\nstop_reason=${event.delta.stop_reason}`);
-  }
-}
-
-const finalMessage = await stream.finalMessage();
 ```
 
 ---
@@ -455,27 +433,21 @@ flowchart LR
 
 ## Official SDKs
 
-Anthropic maintains official SDKs that wrap `POST /v1/messages` (and the other endpoints) with typed methods, streaming helpers, automatic retries, and typed exceptions.
+Anthropic maintains official SDKs that wrap `POST /v1/messages` (and the other endpoints) with typed methods, streaming helpers, automatic retries, and typed exceptions. **These notes standardize on the Python SDK for every code example** — see [the terminology note on the overview page](/notes) if the API-vs-SDK distinction isn't clear yet.
 
-| Language | Package | Install |
-|---|---|---|
-| Python | `anthropic` | `pip install anthropic` |
-| TypeScript / JavaScript | `@anthropic-ai/sdk` | `npm install @anthropic-ai/sdk` |
-| Java | `com.anthropic:anthropic-java` | Maven/Gradle |
-| Go | `github.com/anthropics/anthropic-sdk-go` | `go get` |
-| Ruby | `anthropic` gem | `gem install anthropic` |
-| C# | `Anthropic` (NuGet) | `dotnet add package Anthropic` |
-| PHP | `anthropic-ai/sdk` | `composer require` |
+| Language | Package |
+|---|---|
+| **Python** (used throughout these notes) | `anthropic` |
+| TypeScript / JavaScript | `@anthropic-ai/sdk` |
+| Java | `com.anthropic:anthropic-java` |
+| Go | `github.com/anthropics/anthropic-sdk-go` |
+| Ruby | `anthropic` gem |
+| C# | `Anthropic` (NuGet) |
+| PHP | `anthropic-ai/sdk` |
 
 ```bash
-# Python — inside a virtualenv/venv, not globally
-pip install anthropic
-
-# TypeScript/JavaScript
-npm install @anthropic-ai/sdk
+pip install anthropic   # inside a virtualenv/venv, not globally
 ```
-
-### Python
 
 ```python
 import os
@@ -493,29 +465,11 @@ message = client.messages.create(
 print(message.content)
 ```
 
-### TypeScript
+> **Exam tip:** The client constructor reads `` `ANTHROPIC_API_KEY` `` from the environment by default — the exam may test that you *don't* need to pass `api_key` explicitly if that env var is set, and that hardcoding a key in source is the wrong pattern (see architecture section below).
 
-```typescript
-import Anthropic from "@anthropic-ai/sdk";
+> **Gotcha:** "SDK" vs. "raw HTTP" is a real design decision, not just style — the SDK adds typed exceptions, automatic retry-with-backoff, streaming accumulation helpers, and request-size/timeout handling you'd otherwise reimplement. Default to the official SDK unless the project is explicitly a shell/cURL integration.
 
-const client = new Anthropic({
-  apiKey: process.env["ANTHROPIC_API_KEY"], // default; can be omitted
-});
-
-const message = await client.messages.create({
-  model: "claude-opus-5",
-  max_tokens: 1024,
-  messages: [{ role: "user", content: "Hello, Claude" }],
-});
-
-console.log(message.content);
-```
-
-> **Exam tip:** The client constructor reads `` `ANTHROPIC_API_KEY` `` from the environment by default — the exam may test that you *don't* need to pass `apiKey`/`api_key` explicitly if that env var is set, and that hardcoding a key in source is the wrong pattern (see architecture section below).
-
-> **Gotcha:** "SDK" vs. "raw HTTP" is a real design decision, not just style — the SDKs add typed exceptions, automatic retry-with-backoff, streaming accumulation helpers, and request-size/timeout handling you'd otherwise reimplement. Default to the official SDK unless the project is explicitly a shell/cURL integration or has no SDK for its language.
-
-> **In practice:** `message.content` is an *array* of content blocks, never a bare string — even a plain-text reply comes back as `[{"type": "text", "text": "..."}]`. New Python/TypeScript code should narrow by `block.type` before reading `.text` (`if block.type == "text": print(block.text)`), both because a `tool_use`-only turn has no text block at all, and because a well-typed language (TypeScript especially) will refuse to compile `content[0].text` against a discriminated union without the narrowing check first.
+> **In practice:** `message.content` is an *array* of content blocks, never a bare string — even a plain-text reply comes back as `[{"type": "text", "text": "..."}]`. Narrow by `block.type` before reading `.text` (`if block.type == "text": print(block.text)`) — a `tool_use`-only turn has no text block at all.
 
 ---
 
