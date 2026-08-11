@@ -1,9 +1,10 @@
 <script lang="ts">
 	import 'katex/dist/katex.css';
+	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { PanelLeftOpen, PanelLeftClose } from '@lucide/svelte';
+	import { PanelLeftOpen, PanelLeftClose, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import FullscreenToggle from '$lib/components/FullscreenToggle.svelte';
 	import { DOMAINS } from '$lib/notes/domains';
 	import type { HeadingEntry } from '$lib/server/notesMarkdown';
@@ -11,7 +12,9 @@
 	let { children } = $props();
 
 	let sidebarOpen = $state(false);
+	let subTocOpen = $state(true);
 	let pageEl = $state<HTMLElement | null>(null);
+	let readingSlug = $state('');
 
 	function hrefFor(code: string) {
 		return code === 'overview' ? resolve('/notes') : resolve('/notes/[code]', { code });
@@ -44,6 +47,42 @@
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') closeSidebar();
 	}
+
+	// Scrollspy: highlight whichever heading the user is currently reading in the sub-toc. Reads
+	// straight from the rendered DOM (headings from NotesDomain's {@html} content are descendants
+	// of this layout) rather than needing a shared store between the two components.
+	let headingObserver: IntersectionObserver | null = null;
+
+	function setupScrollSpy() {
+		if (!browser) return;
+		headingObserver?.disconnect();
+		readingSlug = '';
+
+		const headings = document.querySelectorAll<HTMLElement>('.notes-body h2[id], .notes-body h3[id]');
+		if (headings.length === 0) return;
+
+		headingObserver = new IntersectionObserver(
+			(entries) => {
+				const visible = entries.filter((e) => e.isIntersecting);
+				if (visible.length === 0) return;
+				visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+				readingSlug = visible[0].target.id;
+			},
+			// Treats a heading as "current" once it crosses just below the sticky toolbar, until
+			// the next heading takes over — not simply whichever heading is anywhere on screen.
+			{ rootMargin: '-90px 0px -70% 0px', threshold: 0 }
+		);
+		for (const h of headings) headingObserver.observe(h);
+	}
+
+	$effect(() => {
+		// activeHeadings changes on navigation to a different domain page — re-scan for the new
+		// page's headings once its content has rendered.
+		void activeHeadings;
+		if (browser) setupScrollSpy();
+	});
+
+	onDestroy(() => headingObserver?.disconnect());
 </script>
 
 <svelte:window onkeydown={sidebarOpen ? onKeydown : undefined} />
@@ -88,21 +127,46 @@
 				<ul>
 					{#each DOMAINS as d (d.code)}
 						{@const active = isActive(d.code)}
+						{@const hasSubToc = active && activeHeadings.length > 0}
 						<li>
-							<a
-								href={hrefFor(d.code)}
-								class:active
-								aria-current={active ? 'page' : undefined}
-								onclick={closeSidebar}
-							>
-								<span class="title">{d.title}</span>
-								{#if d.weight}<span class="weight">{d.weight}%</span>{/if}
-							</a>
-							{#if active && activeHeadings.length > 0}
-								<ul class="sub-toc">
+							<div class="toc-row" class:active>
+								<a
+									href={hrefFor(d.code)}
+									class="toc-link"
+									aria-current={active ? 'page' : undefined}
+									onclick={closeSidebar}
+								>
+									<span class="title">{d.title}</span>
+									{#if d.weight}<span class="weight">{d.weight}%</span>{/if}
+								</a>
+								{#if hasSubToc}
+									<button
+										type="button"
+										class="toc-collapse"
+										aria-expanded={subTocOpen}
+										aria-controls="active-sub-toc"
+										aria-label={subTocOpen ? 'Collapse section headings' : 'Expand section headings'}
+										onclick={() => (subTocOpen = !subTocOpen)}
+									>
+										{#if subTocOpen}
+											<ChevronUp size={15} strokeWidth={2} />
+										{:else}
+											<ChevronDown size={15} strokeWidth={2} />
+										{/if}
+									</button>
+								{/if}
+							</div>
+							{#if hasSubToc && subTocOpen}
+								<ul class="sub-toc" id="active-sub-toc">
 									{#each activeHeadings as h (h.slug)}
 										<li class:sub={h.depth === 3}>
-											<a href="#{h.slug}" onclick={closeSidebar}>{h.text}</a>
+											<a
+												href="#{h.slug}"
+												class:reading={h.slug === readingSlug}
+												onclick={closeSidebar}
+											>
+												{h.text}
+											</a>
 										</li>
 									{/each}
 								</ul>
@@ -237,6 +301,19 @@
 		gap: 2px;
 	}
 
+	/* The link and its collapse button are one visual unit — the active/current-page background
+	   goes on this shared row, not the link alone, so the chevron reads as part of the same
+	   pill instead of a separate floating control next to it. */
+	.toc-row {
+		display: flex;
+		align-items: stretch;
+		border-radius: var(--radius-sm);
+	}
+
+	.toc-row.active {
+		background: var(--accent-soft);
+	}
+
 	.toc-scroll a {
 		display: flex;
 		align-items: center;
@@ -249,15 +326,41 @@
 		font-size: 0.86rem;
 	}
 
-	.toc-scroll a:hover {
+	.toc-link {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.toc-row.active .toc-link {
+		color: var(--accent);
+		font-weight: 600;
+	}
+
+	.toc-row:not(.active) .toc-link:hover {
 		background: var(--surface-hover);
 		color: var(--text);
 	}
 
-	.toc-scroll a.active {
-		background: var(--accent-soft);
+	.toc-collapse {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.toc-row.active .toc-collapse {
 		color: var(--accent);
-		font-weight: 600;
+	}
+
+	.toc-collapse:hover {
+		background: color-mix(in srgb, var(--text) 10%, transparent);
+		color: var(--text);
 	}
 
 	.toc-scroll .weight {
@@ -266,7 +369,7 @@
 		flex-shrink: 0;
 	}
 
-	.toc-scroll a.active .weight {
+	.toc-row.active .weight {
 		color: var(--accent);
 	}
 
@@ -288,7 +391,17 @@
 	}
 
 	.sub-toc a:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+
+	/* Scrollspy: which heading the user is currently reading — same accent-soft/accent pairing
+	   as the active domain pill above, so the two "you are here" signals read as one visual
+	   language rather than two different treatments. */
+	.sub-toc a.reading {
+		background: var(--accent-soft);
 		color: var(--accent);
+		font-weight: 600;
 	}
 
 	@media (min-width: 900px) {
@@ -309,6 +422,7 @@
 			bottom: auto;
 			align-self: start;
 			max-height: calc(100vh - 96px);
+			overflow-y: auto;
 			width: auto;
 			background: none;
 			border-right: none;

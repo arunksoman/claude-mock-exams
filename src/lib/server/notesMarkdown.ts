@@ -152,11 +152,13 @@ export function createNotesMarked() {
 				if (language === 'mermaid') {
 					return `<pre class="mermaid" data-src="${escapeHtml(text)}">${escapeHtml(text)}</pre>\n`;
 				}
-				const validLang = language && hljs.getLanguage(language) ? language : undefined;
-				const highlighted = validLang
-					? hljs.highlight(text, { language: validLang }).value
-					: hljs.highlightAuto(text).value;
-				const langClass = validLang ? ` language-${validLang}` : '';
+				// hljs.highlightAuto() tries every registered grammar to guess a language — expensive,
+				// and pointless for untagged blocks here (mostly directory trees / plain output, not
+				// real code to guess at). Treat untagged fences as plaintext instead: faster and it
+				// doesn't mis-color file paths as some random language.
+				const validLang = language && hljs.getLanguage(language) ? language : 'plaintext';
+				const highlighted = hljs.highlight(text, { language: validLang }).value;
+				const langClass = validLang !== 'plaintext' ? ` language-${validLang}` : '';
 				return `<pre class="hljs-block"><code class="hljs${langClass}">${highlighted}</code></pre>\n`;
 			},
 			table({ header, rows }: Tokens.Table) {
