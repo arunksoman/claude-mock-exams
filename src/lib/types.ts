@@ -96,6 +96,7 @@ export interface PracticeConfig {
 export interface PracticeAttempt {
 	id: string;
 	kind: 'practice';
+	certCode: string;
 	config: PracticeConfig;
 	questions: GradedQuestion[];
 	startedAt: number;
@@ -107,6 +108,7 @@ export interface PracticeAttempt {
 export interface ExamAttempt {
 	id: string;
 	kind: 'exam';
+	certCode: string;
 	startedAt: number;
 	completedAt: number;
 	durationMinutes: number;
@@ -120,6 +122,7 @@ export type Attempt = PracticeAttempt | ExamAttempt;
 /** localStorage shape for a practice session that can be resumed. */
 export interface PracticeInProgress {
 	id: string;
+	certCode: string;
 	config: PracticeConfig;
 	questions: QuestionFull[];
 	answers: Record<number, number[]>;

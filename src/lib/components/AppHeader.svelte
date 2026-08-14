@@ -2,25 +2,32 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Menu, Trash2, X } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Menu, Trash2, X } from '@lucide/svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import { resetAllAppState } from '$lib/state/index.svelte';
 
 	let menuOpen = $state(false);
+	let notesMenuOpen = $state(false);
+	let notesGroupOpen = $state(false);
 	let confirmOpen = $state(false);
 
 	const links = [
 		{ href: resolve('/'), label: 'Home' },
 		{ href: resolve('/practice'), label: 'Practice' },
 		{ href: resolve('/exam'), label: 'Mock Exam' },
-		{ href: resolve('/history'), label: 'History' },
-		{ href: resolve('/notes'), label: 'Study Notes' }
+		{ href: resolve('/history'), label: 'History' }
 	];
+
+	const notesHref = resolve('/notes/ccdv-f');
 
 	function isActive(href: string): boolean {
 		if (href === '/') return page.url.pathname === '/';
 		return page.url.pathname.startsWith(href);
+	}
+
+	function isNotesActive(): boolean {
+		return page.url.pathname.startsWith('/notes');
 	}
 
 	function requestClear() {
@@ -37,12 +44,33 @@
 
 <header>
 	<div class="inner">
-		<a class="brand" href={resolve('/')}>CCDV-F Practice</a>
+		<a class="brand" href={resolve('/')}>Claude Certification</a>
 
 		<nav class="desktop-nav">
 			{#each links as link (link.href)}
 				<a href={link.href} class:active={isActive(link.href)}>{link.label}</a>
 			{/each}
+			<div class="notes-wrap">
+				<button
+					type="button"
+					class="notes-toggle"
+					class:active={isNotesActive()}
+					aria-expanded={notesMenuOpen}
+					onclick={() => (notesMenuOpen = !notesMenuOpen)}
+				>
+					Study Notes
+					<ChevronDown size={14} strokeWidth={1.75} />
+				</button>
+				{#if notesMenuOpen}
+					<div class="dropdown notes-dropdown" role="menu">
+						<a href={notesHref} role="menuitem" onclick={() => (notesMenuOpen = false)}>CCDV-F</a>
+						<span class="disabled-item" role="menuitem" aria-disabled="true">
+							<span class="label">CCAR-F</span>
+							<span class="badge">Coming soon</span>
+						</span>
+					</div>
+				{/if}
+			</div>
 		</nav>
 
 		<div class="controls">
@@ -74,6 +102,35 @@
 									{link.label}
 								</a>
 							{/each}
+							<button
+								type="button"
+								class="notes-group-toggle"
+								class:active={isNotesActive()}
+								aria-expanded={notesGroupOpen}
+								onclick={() => (notesGroupOpen = !notesGroupOpen)}
+							>
+								Study Notes
+								{#if notesGroupOpen}
+									<ChevronUp size={15} strokeWidth={1.75} />
+								{:else}
+									<ChevronDown size={15} strokeWidth={1.75} />
+								{/if}
+							</button>
+							{#if notesGroupOpen}
+								<a
+									href={notesHref}
+									class="notes-sub-link"
+									class:active={isNotesActive()}
+									role="menuitem"
+									onclick={() => (menuOpen = false)}
+								>
+									CCDV-F
+								</a>
+								<span class="disabled-item notes-sub-link" role="menuitem" aria-disabled="true">
+									<span class="label">CCAR-F</span>
+									<span class="badge">Coming soon</span>
+								</span>
+							{/if}
 							<div class="divider"></div>
 						</nav>
 						<button type="button" role="menuitem" onclick={requestClear}>
@@ -125,6 +182,7 @@
 
 	.desktop-nav {
 		display: flex;
+		align-items: center;
 		gap: var(--space-5);
 		flex: 1;
 	}
@@ -185,6 +243,113 @@
 		box-shadow: var(--shadow-md);
 		min-width: 190px;
 		padding: var(--space-1);
+	}
+
+	.notes-wrap {
+		position: relative;
+	}
+
+	.notes-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		padding: var(--space-1) 0;
+		background: none;
+		border: none;
+		border-bottom: 2px solid transparent;
+		color: var(--text-secondary);
+		font-size: 0.92rem;
+		font-family: inherit;
+		cursor: pointer;
+	}
+
+	.notes-toggle:hover {
+		color: var(--text);
+	}
+
+	.notes-toggle.active {
+		color: var(--text);
+		border-bottom-color: var(--accent);
+	}
+
+	.notes-dropdown {
+		left: 0;
+		right: auto;
+		min-width: 230px;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.notes-dropdown a {
+		display: block;
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-sm);
+		border-bottom: none;
+		font-size: 0.88rem;
+		color: var(--text);
+		white-space: nowrap;
+	}
+
+	.notes-dropdown a:hover {
+		background: var(--surface-hover);
+	}
+
+	.disabled-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-sm);
+		font-size: 0.88rem;
+		color: var(--text-muted);
+		opacity: 0.55;
+		cursor: not-allowed;
+		white-space: nowrap;
+	}
+
+	.disabled-item .label {
+		white-space: nowrap;
+	}
+
+	.badge {
+		font-size: 0.68rem;
+		font-weight: 600;
+		padding: 1px var(--space-2);
+		border-radius: var(--radius-sm);
+		background: var(--surface-hover);
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+
+	.notes-group-toggle {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		background: none;
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--text);
+		font-size: 0.88rem;
+		font-family: inherit;
+		font-weight: 600;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.notes-group-toggle:hover {
+		background: var(--surface-hover);
+	}
+
+	.notes-group-toggle.active {
+		color: var(--accent);
+	}
+
+	.mobile-nav .notes-sub-link {
+		padding-left: var(--space-5);
 	}
 
 	.mobile-nav {

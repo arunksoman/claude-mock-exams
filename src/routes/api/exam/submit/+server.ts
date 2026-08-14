@@ -42,6 +42,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const attempt: ExamAttempt = {
 		id: body.attemptId,
 		kind: 'exam',
+		certCode: certification.code,
 		startedAt: typeof body.startedAt === 'number' ? body.startedAt : Date.now(),
 		completedAt: Date.now(),
 		durationMinutes:

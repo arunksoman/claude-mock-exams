@@ -17,13 +17,15 @@
 	let readingSlug = $state('');
 
 	function hrefFor(code: string) {
-		return code === 'overview' ? resolve('/notes') : resolve('/notes/[code]', { code });
+		return code === 'overview'
+			? resolve('/notes/ccdv-f')
+			: resolve('/notes/ccdv-f/[code]', { code });
 	}
 
 	function isActive(code: string): boolean {
 		const path = page.url.pathname;
-		if (code === 'overview') return path === '/notes' || path === '/notes/';
-		return path === `/notes/${code}` || path.startsWith(`/notes/${code}/`);
+		if (code === 'overview') return path === '/notes/ccdv-f' || path === '/notes/ccdv-f/';
+		return path === `/notes/ccdv-f/${code}` || path.startsWith(`/notes/ccdv-f/${code}/`);
 	}
 
 	function closeSidebar() {
@@ -58,7 +60,9 @@
 		headingObserver?.disconnect();
 		readingSlug = '';
 
-		const headings = document.querySelectorAll<HTMLElement>('.notes-body h2[id], .notes-body h3[id]');
+		const headings = document.querySelectorAll<HTMLElement>(
+			'.notes-body h2[id], .notes-body h3[id]'
+		);
 		if (headings.length === 0) return;
 
 		headingObserver = new IntersectionObserver(
@@ -113,11 +117,7 @@
 	</div>
 
 	{#if sidebarOpen}
-		<button
-			type="button"
-			class="backdrop"
-			aria-label="Close contents menu"
-			onclick={closeSidebar}
+		<button type="button" class="backdrop" aria-label="Close contents menu" onclick={closeSidebar}
 		></button>
 	{/if}
 
@@ -145,7 +145,9 @@
 										class="toc-collapse"
 										aria-expanded={subTocOpen}
 										aria-controls="active-sub-toc"
-										aria-label={subTocOpen ? 'Collapse section headings' : 'Expand section headings'}
+										aria-label={subTocOpen
+											? 'Collapse section headings'
+											: 'Expand section headings'}
 										onclick={() => (subTocOpen = !subTocOpen)}
 									>
 										{#if subTocOpen}

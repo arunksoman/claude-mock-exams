@@ -110,9 +110,8 @@
 	background-color: var(--text-secondary);
 }
 
-html,
-body {
-	height: 100%;
+html {
+	background: var(--bg);
 }
 
 body {

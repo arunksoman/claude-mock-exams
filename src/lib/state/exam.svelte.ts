@@ -77,9 +77,20 @@ export function gotoExamIndex(index: number): void {
 	persist();
 }
 
-/** Stores the graded result from /api/exam/submit into history and clears the resumable session. */
+/**
+ * Stores the graded result from /api/exam/submit into history. Deliberately does NOT clear
+ * `examState.session` here — the active exam page's own guard effect (`if (!examState.session)
+ * goto('/exam')`) reacts to that field, and nulling it while still on that page races the
+ * caller's explicit navigation to the results page, occasionally winning and bouncing the user
+ * back to the exam intro instead of showing results. Call `clearExamSession()` only after
+ * navigating away.
+ */
 export function completeExam(attempt: ExamAttempt): void {
 	addAttempt(attempt);
+}
+
+/** Clears the resumable exam session — call only once the app has already navigated away from the active-exam page. */
+export function clearExamSession(): void {
 	examState.session = null;
 	persist();
 }

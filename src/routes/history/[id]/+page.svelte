@@ -5,6 +5,7 @@
 	import Markdown from '$lib/components/Markdown.svelte';
 	import ChoiceReview from '$lib/components/ChoiceReview.svelte';
 	import ScoreBreakdown from '$lib/components/ScoreBreakdown.svelte';
+	import { DEFAULT_CERT_CODE } from '$lib/constants';
 	import { getAttempt } from '$lib/state/history.svelte';
 
 	let { data } = $props();
@@ -33,7 +34,10 @@
 	</div>
 {:else}
 	<div class="header">
-		<span class="kind">{attempt.kind === 'exam' ? 'Mock Exam' : 'Practice Session'}</span>
+		<span class="kind">
+			{attempt.kind === 'exam' ? 'Mock Exam' : 'Practice Session'}
+			<span class="cert-badge">{attempt.certCode ?? DEFAULT_CERT_CODE}</span>
+		</span>
 		<h1>{formatDate(attempt.completedAt)}</h1>
 	</div>
 
@@ -83,9 +87,23 @@
 	}
 
 	.kind {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
 		font-size: 0.78rem;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
+		color: var(--text-muted);
+	}
+
+	.cert-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: none;
+		letter-spacing: normal;
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-sm);
+		background: var(--surface-hover);
 		color: var(--text-muted);
 	}
 

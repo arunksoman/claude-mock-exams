@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { BookOpen, GraduationCap, Inbox } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
+	import { DEFAULT_CERT_CODE } from '$lib/constants';
 	import { historyState } from '$lib/state/history.svelte';
 
 	function formatDate(ts: number): string {
@@ -36,7 +37,10 @@
 						{/if}
 					</div>
 					<div class="info">
-						<span class="title">{attempt.kind === 'exam' ? 'Mock Exam' : 'Practice Session'}</span>
+						<span class="title">
+							{attempt.kind === 'exam' ? 'Mock Exam' : 'Practice Session'}
+							<span class="cert-badge">{attempt.certCode ?? DEFAULT_CERT_CODE}</span>
+						</span>
 						<span class="meta">{formatDate(attempt.completedAt)}</span>
 					</div>
 					<div class="score">
@@ -121,8 +125,20 @@
 	}
 
 	.title {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
 		font-weight: 600;
 		font-size: 0.94rem;
+	}
+
+	.cert-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-sm);
+		background: var(--surface-hover);
+		color: var(--text-muted);
 	}
 
 	.meta {

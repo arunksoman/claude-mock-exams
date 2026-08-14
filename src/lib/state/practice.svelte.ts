@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { STORAGE_KEYS } from '$lib/constants';
+import { DEFAULT_CERT_CODE, STORAGE_KEYS } from '$lib/constants';
 import { readJSON, remove, writeJSON } from '$lib/storage/localStorage';
 import { buildGradedQuestion } from '$lib/scoring';
 import type { PracticeConfig, PracticeInProgress, QuestionFull, PracticeAttempt } from '$lib/types';
@@ -22,12 +22,19 @@ export function initPracticeSession(): void {
 	const restored = readJSON<PracticeInProgress>(STORAGE_KEYS.practiceInProgress);
 	// Sessions saved before the strike-off feature existed won't have this field.
 	if (restored && !restored.struck) restored.struck = {};
+	// Sessions saved before cert-tagging existed won't have this field.
+	if (restored && !restored.certCode) restored.certCode = DEFAULT_CERT_CODE;
 	practiceState.session = restored;
 }
 
-export function startPracticeSession(config: PracticeConfig, questions: QuestionFull[]): void {
+export function startPracticeSession(
+	certCode: string,
+	config: PracticeConfig,
+	questions: QuestionFull[]
+): void {
 	practiceState.session = {
 		id: crypto.randomUUID(),
+		certCode,
 		config,
 		questions,
 		answers: {},
@@ -83,6 +90,7 @@ export function finishPracticeSession(): PracticeAttempt | null {
 	const attempt: PracticeAttempt = {
 		id: session.id,
 		kind: 'practice',
+		certCode: session.certCode,
 		config: session.config,
 		questions: graded,
 		startedAt: session.startedAt,

@@ -9,7 +9,7 @@ export interface NotesSection {
 	headings: HeadingEntry[];
 }
 
-const modules = import.meta.glob('$lib/notes/content/*.md', {
+const modules = import.meta.glob('$lib/notes/content/ccdv-f/*.md', {
 	query: '?raw',
 	import: 'default',
 	eager: true
