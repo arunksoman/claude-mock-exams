@@ -9,6 +9,7 @@
 	import {
 		practiceState,
 		answerPracticeQuestion,
+		togglePracticeStrike,
 		gotoPracticeIndex,
 		finishPracticeSession
 	} from '$lib/state/practice.svelte';
@@ -31,6 +32,7 @@
 	const isMultiple = $derived(currentQuestion?.questionType === 'multiple_response');
 
 	let selected = $state<number[]>([]);
+	let struck = $state<number[]>([]);
 	// Whether the reasoning panel is showing for the current question — separate from
 	// hasAnswered so the user can hide it again and reconsider without losing their answer.
 	let showReasoning = $state(false);
@@ -38,9 +40,15 @@
 	$effect(() => {
 		if (currentQuestion && session) {
 			selected = session.answers[currentQuestion.id] ?? [];
+			struck = session.struck[currentQuestion.id] ?? [];
 			showReasoning = Boolean(session.revealed[currentQuestion.id]);
 		}
 	});
+
+	function onStrikeChange(choiceId: number) {
+		if (!currentQuestion) return;
+		togglePracticeStrike(currentQuestion.id, choiceId);
+	}
 
 	function onChoiceChange(next: number[]) {
 		if (!currentQuestion) return;
@@ -132,7 +140,9 @@
 				questionType={currentQuestion.questionType}
 				selectCount={currentQuestion.selectCount}
 				bind:selected
+				bind:struck
 				onchange={onChoiceChange}
+				onstrike={onStrikeChange}
 			/>
 			{#if isMultiple}
 				<div class="check-answer">

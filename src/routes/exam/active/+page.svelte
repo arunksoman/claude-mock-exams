@@ -13,6 +13,7 @@
 		examState,
 		answerExamQuestion,
 		toggleExamFlag,
+		toggleExamStrike,
 		gotoExamIndex,
 		completeExam
 	} from '$lib/state/exam.svelte';
@@ -35,6 +36,7 @@
 	const answeredCount = $derived(session ? Object.keys(session.answers).length : 0);
 
 	let selected = $state<number[]>([]);
+	let struck = $state<number[]>([]);
 	let containerEl = $state<HTMLElement | null>(null);
 	let confirmOpen = $state(false);
 	let submitting = $state(false);
@@ -50,12 +52,18 @@
 	$effect(() => {
 		if (currentQuestion && session) {
 			selected = session.answers[currentQuestion.id] ?? [];
+			struck = session.struck[currentQuestion.id] ?? [];
 		}
 	});
 
 	function onChoiceChange(next: number[]) {
 		if (!currentQuestion) return;
 		answerExamQuestion(currentQuestion.id, next);
+	}
+
+	function onStrikeChange(choiceId: number) {
+		if (!currentQuestion) return;
+		toggleExamStrike(currentQuestion.id, choiceId);
 	}
 
 	function next() {
@@ -151,7 +159,9 @@
 						questionType={currentQuestion.questionType}
 						selectCount={currentQuestion.selectCount}
 						bind:selected
+						bind:struck
 						onchange={onChoiceChange}
+						onstrike={onStrikeChange}
 					/>
 				</div>
 

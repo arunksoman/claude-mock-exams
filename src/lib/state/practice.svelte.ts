@@ -14,7 +14,15 @@ function persist(): void {
 
 export function initPracticeSession(): void {
 	if (!browser) return;
-	practiceState.session = readJSON<PracticeInProgress>(STORAGE_KEYS.practiceInProgress);
+	// Prepare the restored session on a plain local first, then assign it in one shot — reading
+	// `practiceState.session` back out here (to patch it in place) would make this call's own
+	// $effect depend on `practiceState.session`, and since it also *writes* that field, every
+	// future re-run would reassign it to a fresh readJSON() object and immediately retrigger
+	// itself: an infinite effect loop.
+	const restored = readJSON<PracticeInProgress>(STORAGE_KEYS.practiceInProgress);
+	// Sessions saved before the strike-off feature existed won't have this field.
+	if (restored && !restored.struck) restored.struck = {};
+	practiceState.session = restored;
 }
 
 export function startPracticeSession(config: PracticeConfig, questions: QuestionFull[]): void {
@@ -24,6 +32,7 @@ export function startPracticeSession(config: PracticeConfig, questions: Question
 		questions,
 		answers: {},
 		revealed: {},
+		struck: {},
 		currentIndex: 0,
 		startedAt: Date.now()
 	};
@@ -39,6 +48,17 @@ export function answerPracticeQuestion(
 	if (!session) return;
 	session.answers[questionId] = selectedIds;
 	if (revealed) session.revealed[questionId] = true;
+	persist();
+}
+
+/** Toggles a choice as struck-off (eliminated) for the given question — a candidate's own note-taking aid, never sent to the server or scored. */
+export function togglePracticeStrike(questionId: number, choiceId: number): void {
+	const session = practiceState.session;
+	if (!session) return;
+	const current = session.struck[questionId] ?? [];
+	session.struck[questionId] = current.includes(choiceId)
+		? current.filter((id) => id !== choiceId)
+		: [...current, choiceId];
 	persist();
 }
 

@@ -13,7 +13,15 @@ function persist(): void {
 
 export function initExam(): void {
 	if (!browser) return;
-	examState.session = readJSON<ExamInProgress>(STORAGE_KEYS.examInProgress);
+	// Prepare the restored session on a plain local first, then assign it in one shot — reading
+	// `examState.session` back out here (to patch it in place) would make this call's own
+	// $effect depend on `examState.session`, and since it also *writes* that field, every future
+	// re-run would reassign it to a fresh readJSON() object and immediately retrigger itself: an
+	// infinite effect loop.
+	const restored = readJSON<ExamInProgress>(STORAGE_KEYS.examInProgress);
+	// Sessions saved before the strike-off feature existed won't have this field.
+	if (restored && !restored.struck) restored.struck = {};
+	examState.session = restored;
 }
 
 export function startExam(payload: {
@@ -29,6 +37,7 @@ export function startExam(payload: {
 		questions: payload.questions,
 		answers: {},
 		flagged: [],
+		struck: {},
 		currentIndex: 0
 	};
 	persist();
@@ -38,6 +47,17 @@ export function answerExamQuestion(questionId: number, selectedIds: number[]): v
 	const session = examState.session;
 	if (!session) return;
 	session.answers[questionId] = selectedIds;
+	persist();
+}
+
+/** Toggles a choice as struck-off (eliminated) for the given question — a candidate's own note-taking aid, never sent to the server or scored. */
+export function toggleExamStrike(questionId: number, choiceId: number): void {
+	const session = examState.session;
+	if (!session) return;
+	const current = session.struck[questionId] ?? [];
+	session.struck[questionId] = current.includes(choiceId)
+		? current.filter((id) => id !== choiceId)
+		: [...current, choiceId];
 	persist();
 }
 

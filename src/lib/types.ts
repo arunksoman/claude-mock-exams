@@ -124,6 +124,8 @@ export interface PracticeInProgress {
 	questions: QuestionFull[];
 	answers: Record<number, number[]>;
 	revealed: Record<number, boolean>;
+	/** Choice ids the candidate struck off as eliminated distractors, per question id — a note-taking aid, not part of scoring. */
+	struck: Record<number, number[]>;
 	currentIndex: number;
 	startedAt: number;
 }
@@ -136,5 +138,7 @@ export interface ExamInProgress {
 	questions: QuestionPublic[];
 	answers: Record<number, number[]>;
 	flagged: number[];
+	/** Choice ids the candidate struck off as eliminated distractors, per question id — a note-taking aid, not part of scoring. */
+	struck: Record<number, number[]>;
 	currentIndex: number;
 }
