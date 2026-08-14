@@ -1,17 +1,8 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { asset } from '$app/paths';
-	import { Upload, LogOut, CircleCheck, CircleAlert, FileDown } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
+	import { LogOut, ListChecks } from '@lucide/svelte';
 
-	let { data, form } = $props();
-
-	let uploading = $state(false);
-	let fileName = $state('');
-
-	function onFileChange(e: Event) {
-		const input = e.currentTarget as HTMLInputElement;
-		fileName = input.files?.[0]?.name ?? '';
-	}
+	let { data } = $props();
 </script>
 
 <svelte:head>
@@ -45,74 +36,17 @@
 	</div>
 </section>
 
-<section class="upload-section">
-	<h2>Upload questions</h2>
-	<p class="hint">
-		Upload a <code>.jsonl</code> file — one question object per line, same shape as
-		<code>data/ccdv-f/*.jsonl</code>. Questions with a matching <code>external_key</code> are updated
-		in place (choices replaced); questions without one are always inserted as new. If any line fails validation,
-		nothing is written.
-	</p>
-	<a class="sample-link" href={asset('/sample-questions.jsonl')} download>
-		<FileDown size={14} strokeWidth={1.75} />
-		Download sample .jsonl (single_choice + multiple_response examples)
-	</a>
-
-	<form
-		method="POST"
-		action="?/upload"
-		enctype="multipart/form-data"
-		use:enhance={() => {
-			uploading = true;
-			return async ({ update }) => {
-				await update();
-				uploading = false;
-			};
-		}}
-	>
-		<label class="file-picker">
-			<input type="file" name="file" accept=".jsonl,.txt" required onchange={onFileChange} />
-			<span>{fileName || 'Choose a .jsonl file…'}</span>
-		</label>
-
-		<button type="submit" class="primary" disabled={uploading}>
-			<Upload size={16} strokeWidth={1.75} />
-			{uploading ? 'Uploading…' : 'Upload & Import'}
-		</button>
-	</form>
-
-	{#if form?.uploadError}
-		<p class="error">{form.uploadError}</p>
-	{/if}
-
-	{#if form?.uploadResult}
-		{@const result = form.uploadResult}
-		{#if result.errors.length > 0}
-			<div class="result result-error">
-				<div class="result-header">
-					<CircleAlert size={18} strokeWidth={1.75} />
-					<span>{result.errors.length} error(s) — nothing was written</span>
-				</div>
-				<ul class="error-list">
-					{#each result.errors as err (err.line)}
-						<li>line {err.line}: {err.message}</li>
-					{/each}
-				</ul>
-			</div>
-		{:else}
-			<div class="result result-success">
-				<div class="result-header">
-					<CircleCheck size={18} strokeWidth={1.75} />
-					<span>Import complete</span>
-				</div>
-				<p>
-					{result.created} question(s) created, {result.updated} updated, {result.choicesWritten} choice
-					rows written.
-				</p>
-			</div>
-		{/if}
-	{/if}
-</section>
+<a class="manage-card" href={resolve('/admin/questions')}>
+	<div class="icon"><ListChecks size={22} strokeWidth={1.75} /></div>
+	<div>
+		<h2>Manage Questions</h2>
+		<p>
+			Browse, search, edit, and delete individual questions and choices, or bulk-upload a reviewed <code
+				>.jsonl</code
+			> batch.
+		</p>
+	</div>
+</a>
 
 <style>
 	.header {
@@ -194,142 +128,52 @@
 		font-weight: 600;
 	}
 
-	.upload-section h2 {
-		font-size: 0.85rem;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--text-muted);
-		margin-bottom: var(--space-3);
+	.manage-card {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-4);
+		padding: var(--space-5);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		background: var(--surface);
+		text-decoration: none;
+		color: var(--text);
+		transition:
+			border-color 0.15s ease,
+			box-shadow 0.15s ease;
 	}
 
-	.hint {
-		font-size: 0.86rem;
+	.manage-card:hover {
+		border-color: var(--accent);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.manage-card .icon {
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-md);
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+
+	.manage-card h2 {
+		font-size: 1.05rem;
+		margin-bottom: var(--space-2);
+	}
+
+	.manage-card p {
+		font-size: 0.88rem;
 		color: var(--text-secondary);
-		max-width: 62ch;
-		margin-bottom: var(--space-4);
 	}
 
-	.hint code {
+	.manage-card code {
 		background: var(--surface-hover);
 		border-radius: 4px;
 		padding: 0.1em 0.35em;
 		font-size: 0.92em;
-	}
-
-	.sample-link {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-size: 0.84rem;
-		color: var(--accent);
-		text-decoration: none;
-		margin-bottom: var(--space-5);
-	}
-
-	.sample-link:hover {
-		text-decoration: underline;
-	}
-
-	form {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-3);
-		align-items: center;
-	}
-
-	.file-picker {
-		display: flex;
-		align-items: center;
-		padding: var(--space-2) var(--space-4);
-		border-radius: var(--radius-md);
-		border: 1px dashed var(--border);
-		background: var(--surface);
-		color: var(--text-secondary);
-		font-size: 0.88rem;
-		cursor: pointer;
-	}
-
-	.file-picker input {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		opacity: 0;
-		overflow: hidden;
-	}
-
-	.primary {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-5);
-		border-radius: var(--radius-md);
-		border: none;
-		background: var(--accent);
-		color: var(--accent-contrast);
-		font-weight: 600;
-		font-size: 0.9rem;
-		cursor: pointer;
-	}
-
-	.primary:disabled {
-		opacity: 0.6;
-		cursor: default;
-	}
-
-	.error {
-		color: var(--danger);
-		font-size: 0.88rem;
-		margin-top: var(--space-3);
-	}
-
-	.result {
-		margin-top: var(--space-5);
-		padding: var(--space-4);
-		border-radius: var(--radius-md);
-		border: 1px solid var(--border);
-	}
-
-	.result-success {
-		border-color: var(--success);
-		background: var(--success-soft);
-	}
-
-	.result-error {
-		border-color: var(--danger);
-		background: var(--danger-soft);
-	}
-
-	.result-header {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		font-weight: 600;
-		font-size: 0.92rem;
-	}
-
-	.result-success .result-header {
-		color: var(--success);
-	}
-
-	.result-error .result-header {
-		color: var(--danger);
-	}
-
-	.result p {
-		margin-top: var(--space-2);
-		font-size: 0.88rem;
-		color: var(--text-secondary);
-	}
-
-	.error-list {
-		margin-top: var(--space-3);
-		max-height: 240px;
-		overflow-y: auto;
-		font-size: 0.82rem;
-		color: var(--text-secondary);
-		padding-left: 1.2em;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
 	}
 </style>
