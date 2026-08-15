@@ -9,7 +9,9 @@
 	let { code }: Props = $props();
 
 	function hrefFor(c: string) {
-		return c === 'overview' ? resolve('/notes') : resolve('/notes/[code]', { code: c });
+		return c === 'overview'
+			? resolve('/notes/ccdv-f')
+			: resolve('/notes/ccdv-f/[code]', { code: c });
 	}
 
 	let index = $derived(DOMAINS.findIndex((d) => d.code === code));

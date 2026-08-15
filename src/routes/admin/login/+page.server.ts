@@ -25,6 +25,6 @@ export const actions: Actions = {
 			maxAge: 60 * 60 * 12
 		});
 
-		redirect(303, '/admin');
+		redirect(303, '/admin/questions');
 	}
 };

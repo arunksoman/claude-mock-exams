@@ -25,7 +25,14 @@
 
 <style>
 	.app-shell {
-		min-height: 100%;
+		/* Viewport unit, not a percentage of body/html — percentage min-height on this element
+		   would depend on body/html having a definite height, which isn't reliable across
+		   browsers unless html/body are given an explicit `height` (which in turn clips any
+		   content taller than one viewport, since a fixed `height` doesn't grow to fit
+		   overflowing children — the actual bug this replaced: pages taller than one screen had
+		   an unpainted gap below the clipped body background). `dvh` sizes against the real
+		   viewport directly and still lets this element grow past 100dvh for taller content. */
+		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
 	}

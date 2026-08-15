@@ -101,7 +101,7 @@
 
 	.bar-track {
 		height: 6px;
-		border-radius: 999px;
+		border-radius: 0;
 		background: var(--surface-hover);
 		overflow: hidden;
 	}

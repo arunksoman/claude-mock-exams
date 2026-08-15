@@ -165,7 +165,7 @@
 	}
 
 	.control.isMultiple {
-		border-radius: 4px;
+		border-radius: 0;
 	}
 
 	.option.checked .control {

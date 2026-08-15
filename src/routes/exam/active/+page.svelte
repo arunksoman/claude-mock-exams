@@ -15,7 +15,8 @@
 		toggleExamFlag,
 		toggleExamStrike,
 		gotoExamIndex,
-		completeExam
+		completeExam,
+		clearExamSession
 	} from '$lib/state/exam.svelte';
 	import type { ExamAttempt } from '$lib/types';
 
@@ -95,8 +96,12 @@
 			});
 			if (!res.ok) throw new Error('Submit failed');
 			const attempt = (await res.json()) as ExamAttempt;
+			// Add to history but keep examState.session intact until after navigating away —
+			// this page's own guard effect redirects to /exam the instant the session goes
+			// null, and clearing it here would race the goto below. See completeExam's doc.
 			completeExam(attempt);
 			await goto(resolve('/history/[id]', { id: attempt.id }));
+			clearExamSession();
 		} catch {
 			submitError = 'Could not submit the exam. Please check your connection and try again.';
 			submitting = false;

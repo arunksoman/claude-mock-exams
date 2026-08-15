@@ -45,7 +45,7 @@
 			});
 			if (!res.ok) throw new Error('Failed to start practice session');
 			const body = (await res.json()) as { config: PracticeConfig; questions: QuestionFull[] };
-			startPracticeSession(body.config, body.questions);
+			startPracticeSession(data.certification.code, body.config, body.questions);
 			await goto(resolve('/practice/session'));
 		} catch {
 			errorMsg = 'Something went wrong starting the session. Please try again.';
@@ -158,7 +158,7 @@
 		align-items: center;
 		gap: var(--space-2);
 		padding: var(--space-2) var(--space-4);
-		border-radius: 999px;
+		border-radius: 0;
 		border: 1px solid var(--border);
 		background: var(--surface);
 		color: var(--text-secondary);

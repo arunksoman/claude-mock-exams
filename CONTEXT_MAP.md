@@ -1,16 +1,17 @@
 # Claude Certification Question Bank — Context Map
 
 Reference doc for this project's state, design decisions, and how the pieces fit
-together. Read this first when picking the work back up.
+together. Read this first when picking the work back up. `CLAUDE.md` (short,
+auto-loaded by Claude Code every session) points here for the full detail.
 
 ## Purpose
 
 A practice-exam web app for the **Claude Certified Developer Foundation
 (CCDV-F)** exam: 1060 MCQ questions with full per-choice reasoning, stored in a
 SQLite/libSQL (Turso-compatible) database, served by a SvelteKit UI (practice
-mode, timed mock exams, history/review) deployed on Vercel. Schema is designed
-to support additional certifications later, though only CCDV-F content exists
-now.
+mode, timed mock exams, history/review, and a full study-notes reference)
+deployed on Vercel. Schema is designed to support additional certifications
+later, though only CCDV-F content exists now.
 
 Live at: `claude-mock-exams-eight.vercel.app`.
 
@@ -30,13 +31,16 @@ claude_certification/
 │   ├── markdownify.py        # adds backtick code-span formatting to question/choice text, in place
 │   └── rebalance_difficulty.py  # redistributes difficulty labels directly in the db (not the JSONL)
 ├── src/
-│   ├── routes/               # pages: /, /practice, /practice/session, /exam, /exam/active, /history, /history/[id]
-│   │                          # + api/practice/start, api/exam/start, api/exam/submit (+server.ts endpoints)
+│   ├── routes/               # pages: /, /practice, /practice/session, /exam, /exam/active, /history, /history/[id],
+│   │                          #   /notes, /notes/[code]  + api/practice/start, api/exam/start, api/exam/submit
 │   └── lib/
-│       ├── components/       # ChoicePicker, ChoiceReview, ScoreBreakdown, Timer, QuestionNav, Markdown, FullscreenToggle, ...
+│       ├── components/       # ChoicePicker, ChoiceReview, ScoreBreakdown, Timer, QuestionNav, Markdown,
+│       │                      #   FullscreenToggle, NotesDomain, NotesPager, AppHeader, ThemeToggle, ConfirmDialog
+│       ├── notes/             # domains.ts (static domain metadata) + content/*.md (9 study-notes source files)
 │       ├── state/             # theme/practice/exam/history .svelte.ts — runed client state, persisted to localStorage
 │       ├── storage/            # localStorage.ts — versioned key read/write + clearAllAppData()
-│       ├── server/             # db.ts (libSQL client + cheap cert/domain cache), queries.ts, examSampler.ts, markdown.ts
+│       ├── server/             # db.ts, queries.ts, examSampler.ts, markdown.ts (question bank),
+│       │                        #   notesContent.ts + notesMarkdown.ts (study notes), adminAuth.ts, adminImport.ts
 │       ├── scoring.ts           # grading logic (buildGradedQuestion, domain/overall score breakdowns) — universal, not server-only
 │       └── shuffle.ts            # shuffle() + shuffleQuestionChoices() — used by both api/practice/start and api/exam/start
 ├── vite.config.ts            # SvelteKit + adapter-auto (see Deployment)
@@ -161,13 +165,52 @@ python scripts/rebalance_difficulty.py  # re-apply difficulty relabeling after a
   and `/exam` → `/exam/active` (timed 53-question mock exam matching the real
   exam's shape, flagging, question nav grid, fullscreen). Both write completed
   attempts to `/history`, backed by localStorage (`src/lib/state/`), not the
-  db's `practice_sessions` tables.
+  db's `practice_sessions` tables. `/notes` is a separate, self-contained
+  study-notes reference (see its own section below) — not an exam mode, no
+  scoring, nothing persisted to the DB.
 - **Practice-mode answer flow** (`src/routes/practice/session/+page.svelte`):
   single-choice questions reveal immediately on click. Multi-select
   (`multiple_response`) questions require picking exactly `selectCount`
   choices (capped in `ChoicePicker.svelte` — can't over-select) and pressing
   an explicit **"Check answer"** button before reasoning is revealed, so the
   user can reconsider picks first.
+- **Strike-off / eliminate-distractors** (`ChoicePicker.svelte`, both practice
+  and exam modes): each choice gets a small strikethrough-icon toggle
+  (`struck?: number[]` bindable prop + `onstrike` callback), separate from
+  the main selection click, for the classic exam-strategy move of crossing
+  out choices you've ruled out.
+  - A struck choice's `.option` button gets `disabled` — you cannot select an
+    eliminated choice without un-striking it first.
+  - Striking an already-**selected** choice auto-deselects it first (can't
+    leave the picker in a contradictory "eliminated but still my answer"
+    state); un-striking never re-selects anything on its own.
+  - Works identically for `multiple_response`: striking a selected choice
+    frees up its slot in `selectCount`, so you can pick a replacement: no
+    special-casing needed since the guard is per-choice-id, not per-mode.
+  - Persisted per-question in session state — `struck: Record<number,
+    number[]>` on both `PracticeInProgress` and `ExamInProgress`
+    (`$lib/types.ts`), with `togglePracticeStrike`/`toggleExamStrike`
+    mutators in the respective `$lib/state/*.svelte.ts` modules — so
+    navigating away (Previous/Next, the exam's question-nav grid) and back
+    keeps your eliminations. It's a candidate note-taking aid only: never
+    sent to the server, never scored, and structurally can't leak the answer
+    key since it's pure client-side UI state.
+  - **Svelte 5 effect-loop gotcha hit while building this** — worth knowing
+    before touching `initPracticeSession()`/`initExam()` again: adding a
+    migration guard that *read* `practiceState.session`/`examState.session`
+    right after *reassigning* it, inside the same function (called from the
+    root layout's mount `$effect`), made that effect implicitly depend on
+    the session object. Since `readJSON()` returns a fresh object reference
+    on every call, each re-run reassigned the session and immediately
+    re-triggered itself — `effect_update_depth_exceeded`, an infinite loop,
+    only on the very first "Start Practice"/"Begin Exam" click of a session
+    (i.e. easy to miss in casual testing). Root-caused via git-stash
+    bisection, not the error message alone (which just names the generic
+    Svelte error, not the offending line). **Fix pattern**: prepare any
+    mutation to a freshly-read, not-yet-assigned session on a plain local
+    variable first, then assign to the reactive store once, with no
+    intermediate read of the reactive field in between. Same fix applied
+    symmetrically in both `practice.svelte.ts` and `exam.svelte.ts`.
 - **Reveal correctness scoping** (`ChoiceReview.svelte`): a `revealAll` prop
   (default `true`) controls whether _every_ correct choice is highlighted or
   only the ones the user actually selected. Practice-session's live view
@@ -248,11 +291,19 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   counter, so refreshing or navigating away and back mid-exam still shows the
   correct remaining time. Ticks via its own component-owned `$effect` +
   `setInterval`; auto-submits via an `ontimeup` callback when it hits zero.
-- **Fullscreen distraction-free mode** (`FullscreenToggle.svelte`, exam-only):
-  uses `<svelte:document bind:fullscreenElement>` — Svelte 5's native
-  readonly binding for that property — instead of manually wiring a
-  `fullscreenchange` listener. Escape-to-exit is native browser behavior and
-  isn't intercepted.
+- **Fullscreen distraction-free mode** (`FullscreenToggle.svelte`, reused by
+  both exam mode and Study Notes): uses `<svelte:document
+  bind:fullscreenElement>` — Svelte 5's native readonly binding for that
+  property — instead of manually wiring a `fullscreenchange` listener.
+  Escape-to-exit is native browser behavior and isn't intercepted. Whatever
+  element is passed as `target` must wrap everything that should stay
+  visible/usable while fullscreen, since the Fullscreen API only paints the
+  target and its descendants — this is also what makes it double as a
+  "distraction-free" mode for free: the app header/nav sits outside the
+  target, so it disappears too. Both call sites also need a `:fullscreen`
+  CSS rule restoring padding/background, since the Fullscreen API detaches
+  the element from its normal page layout (`<main>`'s padding no longer
+  applies) — see `.exam:fullscreen` and `.notes-page:fullscreen`.
 - **State & persistence** (`src/lib/state/*.svelte.ts`): one runed module per
   concern (`theme`, `practice`, `exam`, `history`), each following Svelte's
   module-state-export rule (`export const x = $state({...})`, mutated only
@@ -265,12 +316,147 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   `clearAllAppData()`, which the header's "Clear my data" menu item
   (`AppHeader.svelte` → `resetAllAppState()` in `state/index.svelte.ts`)
   calls after a confirm dialog — it wipes exactly those keys, never a blanket
-  `localStorage.clear()`.
+  `localStorage.clear()`. See the effect-loop gotcha above before adding any
+  new migration/patch-up logic to `initPracticeSession()`/`initExam()`.
+- **Known pre-existing gap, not fixed**: a full browser reload (not a
+  client-side nav) on `/practice/session` or `/exam/active` drops the
+  in-progress session and redirects to the setup page — confirmed present
+  even on a clean checkout with none of this session's changes, so it's not
+  a regression, just an existing limitation. Root cause not investigated;
+  likely an ordering issue between the root layout's session-restoring
+  effect and the page's own "redirect if no session" effect on a cold
+  hydration. Client-side navigation (Previous/Next, the nav-panel grid) is
+  unaffected and is how the app is actually used.
 - **Responsive/mobile**: header nav (`AppHeader.svelte`) collapses into the
   existing hamburger dropdown below 640px instead of wrapping; the exam's
   53-tile question-number grid (`QuestionNav.svelte`, inside
   `exam/active/+page.svelte`) is collapsible and defaults collapsed under
   720px so it doesn't push the current question below the fold on a phone.
+- **Scrollbars**: a global thin, theme-aware scrollbar (`app.css`, `*` +
+  `::-webkit-scrollbar`/`scrollbar-width: thin`) replaces each browser's
+  default chunky one everywhere in the app — note it's essentially invisible
+  in headless-Chromium screenshots regardless of the CSS (a headless-mode
+  default, not a bug); verify visually with a real, non-headless browser
+  window if touching this again.
+
+## Study Notes (`/notes`)
+
+A self-contained exam-prep reference distinct from practice/exam modes — no
+scoring, nothing DB-backed, nothing persisted. Built to read well for both
+"cramming before the exam" and genuine first-time learning, not just recall
+drills.
+
+- **Content source** — `src/lib/notes/content/*.md`: `overview.md` plus one
+  file per exam domain (`applications-integration.md`,
+  `model-selection-optimization.md`, `agents-workflows.md`,
+  `prompt-context-engineering.md`, `tools-mcps.md`, `security-safety.md`,
+  `claude-code.md`, `eval-testing-debugging.md`). Filenames must match the
+  domain `code` values wired into `src/lib/notes/domains.ts` — that file
+  (not the presence of a `.md` file alone) is the source of truth for which
+  domains appear, their titles, weights, and sidebar order. Adding a new
+  domain means updating both.
+- **Authoring syntax** (enforced by the custom renderer, `$lib/server/notesMarkdown.ts`):
+  - No `#` (h1) in content files — the page itself renders the domain title
+    as `<h1>`; content starts at `##`.
+  - Blockquote callouts, plain markdown `>`: `**Exam tip:**` (what's likely
+    tested), `**Gotcha:**` (common wrong-answer trap), `**Note:**`
+    (background), `**In practice:**` (real-world usage color that isn't
+    necessarily exam-tested — added specifically to keep "will this be on
+    the exam" material visually distinct from "useful to actually know").
+  - `{{Term|definition}}` — renders a `<dfn>` with a hover/tap tooltip
+    (`data-def` + CSS, keyboard-focusable via `tabindex`).
+  - `{{youtube:VIDEO_ID|Title}}` on its own line — embeds a video. **Only
+    ever include a video ID actually confirmed real via search** (one was
+    caught and removed after a content-writing pass invented one that didn't
+    resolve to anything on WebSearch); when in doubt, omit rather than
+    guess.
+  - KaTeX: inline `$...$`, block `$$\n...\n$$`.
+  - Mermaid: normal ` ```mermaid ` fenced blocks.
+  - Everything else is plain GFM (tables, fenced code with a language tag for
+    syntax highlighting, etc.).
+  - Code examples across all domain files are **Python-only** by policy (an
+    explicit fix after early drafts mixed Python/TypeScript/curl
+    inconsistently and it read as confusing rather than thorough) — curl
+    only appears where the point is literally the wire format (e.g. raw SSE
+    streaming), always labeled as such. `overview.md` has the canonical
+    "API vs. SDK" terminology explainer this policy is documented against.
+- **Rendering pipeline** (`$lib/server/notesMarkdown.ts` + `notesContent.ts`):
+  a `Marked` instance with custom extensions for the syntax above, plus
+  custom renderers for `heading` (slug `id`s for anchor links/sidebar
+  scrollspy), `code` (mermaid → passthrough `<pre class="mermaid"
+  data-src="...">` for client-side rendering; otherwise `hljs.highlight`
+  with the given language, or explicit `'plaintext'` if untagged — **not**
+  `hljs.highlightAuto`, which is both slower and prone to mis-guessing a
+  language for non-code content like directory trees), `table` (wrapped in
+  a horizontally-scrollable `.table-scroll` div), and `link` (external
+  `http(s)` links get `target="_blank" rel="noopener noreferrer"`).
+  Deliberately **not** run through `sanitize-html` (unlike the question-bank
+  renderer, `$lib/server/markdown.ts`) — this content is 100% static and
+  repo-authored, never user input, and sanitizing would fight the allowlist
+  for KaTeX/mermaid/iframe output with no real safety benefit.
+  - `getNotesSection(code)` **caches its rendered HTML in a module-scope
+    `Map`** — this was a real perf fix, not just a nicety: before caching,
+    the full marked+KaTeX+highlight.js pipeline re-ran on *every single
+    request* to the same page, measured at ~850ms for the largest domain
+    file; cached, repeat requests on a warm instance dropped to ~20ms. Same
+    "module-scope cache, cheap enough" pattern as `getCertMeta()`.
+- **Client-side diagram rendering** (`NotesDomain.svelte`): mermaid is
+  dynamically imported (code-split, not in the main bundle) and re-run on
+  theme toggle. Two non-obvious settings are load-bearing for correctness,
+  not just style, and are easy to "clean up" back into a bug later:
+  - `flowchart: { htmlLabels: false }` — the foreignObject-based HTML label
+    mode was measuring node text at width/height 0 in this setup, silently
+    clipping node text mid-word. Plain SVG `<text>` labels size correctly.
+  - **No `fontFamily` override** (don't set it to `'inherit'` or anything
+    else) — mermaid measures label width using its own default font before
+    drawing; overriding the render font without also matching it in
+    measurement makes the rendered text wider than what was measured,
+    which — same symptom — clips it against the node's computed box.
+  - `securityLevel: 'loose'` is required (not `'strict'`, the default) for
+    some sub-elements (e.g. edge labels) that render via foreignObject
+    regardless of the `htmlLabels` flowchart setting above; safe here since
+    100% of diagram source is repo-authored, never user input.
+  - Each rendered diagram gets a small expand-to-modal zoom button, added by
+    mounting a Lucide icon component **imperatively** (Svelte 5's `mount()`/
+    `unmount()` from `'svelte'`) into a `<button>` created via plain
+    `document.createElement`, since that button lives inside mermaid's own
+    raw SVG output (outside Svelte's template) — tracked in a `Map` per
+    mermaid `<pre>` node so a re-render (theme toggle, page nav) unmounts
+    the old icon before the node's `innerHTML` is replaced, avoiding a leak.
+    The zoom modal itself re-derives explicit pixel `width`/`height` from
+    the SVG's `viewBox` before display — mermaid's inline SVG is sized for
+    its small in-page box (`width="100%"`, no `height` attribute, an inline
+    `max-width` style), none of which resolves to anything sensible inside
+    a larger modal, so the modal was rendering blank until this was added.
+- **Layout & navigation** (`src/routes/notes/+layout.svelte`, shared across
+  `/notes` and `/notes/[code]`):
+  - Left sidebar (desktop, sticky, its own scroll — needed an explicit
+    `overflow-y: auto` since `max-height` alone doesn't imply scrolling) /
+    off-canvas drawer with a backdrop (mobile, triggered by a small sticky
+    translucent icon button, not a full labeled button — deliberately
+    minimal so it doesn't compete with page content).
+  - The active domain's headings nest under it in the sidebar and are
+    individually collapsible (chevron toggle) so one long domain's heading
+    list doesn't push every other domain off-screen.
+  - **Scrollspy**: an `IntersectionObserver` over the rendered `h2`/`h3`
+    elements highlights whichever heading the reader is currently at in the
+    sidebar, re-armed on navigation to a new domain page (headings are
+    queried straight from the DOM `NotesDomain.svelte` renders — no shared
+    store needed, since the layout and the page content share the same DOM
+    subtree).
+  - `min-width: 0` is required on the sidebar's grid content column — grid
+    items default to a content-based minimum width, so without this, wide
+    content (a mermaid diagram, a long code line) blew out the whole page
+    into horizontal scroll instead of scrolling inside its own box. General
+    lesson for any future two-column grid layout in this app.
+- **Content authorship**: the initial 8-domain build and later comprehensive
+  revision pass (adding real code samples, CLI references, file-structure
+  examples) were both done via parallel background subagents, one per
+  domain, each independently researching current docs via WebFetch/WebSearch
+  rather than relying on training-data recall — deliberately, since exact
+  field names/CLI flags/config shapes are exactly the kind of thing that
+  goes stale or gets misremembered, and this is exam-prep content where
+  precision matters.
 
 ## Admin (`/admin`)
 
@@ -344,6 +530,11 @@ rate-limiting/lockout on failed attempts.
   a "No Output Directory named 'public'" build error). In Vercel's project
   settings, the **Output Directory override must stay off** (blank) — pinning
   it to `public` breaks `adapter-auto`'s `.vercel/output` format the same way.
+  Locally, `pnpm run build` output lands in `.svelte-kit/output/` (what
+  `pnpm run preview` actually serves) — a stale `build/` directory left over
+  from an earlier local setup is **not** part of this pipeline and isn't
+  regenerated by `pnpm run build`; don't trust its contents/timestamps if it
+  still exists on disk, and it's safe to delete.
 - **`sanitize-html` / `htmlparser2` ESM bug**: `sanitize-html@2.17.6` (latest)
   declares a dependency on `htmlparser2@^12`, which dropped CommonJS support
   entirely — `sanitize-html`'s own `require('htmlparser2')` call crashes at
@@ -371,3 +562,9 @@ rate-limiting/lockout on failed attempts.
   import.
 - The answer-length-balance fix (see Content summary) isn't scripted/
   reproducible — it was a one-time editing pass across all 1060 questions.
+- A full page reload mid-practice/mid-exam drops the in-progress session
+  (see Frontend section) — not investigated/fixed, confirmed pre-existing.
+- The Study Notes pages have no automated content-freshness check — domain
+  files were grounded against live docs at write time, but nothing re-verifies
+  them later if upstream docs change (e.g. Claude Code's CLAUDE.md/settings
+  schema, which moves fast).

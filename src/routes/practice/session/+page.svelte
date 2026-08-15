@@ -187,7 +187,7 @@
 
 	.track {
 		height: 4px;
-		border-radius: 999px;
+		border-radius: 0;
 		background: var(--surface-hover);
 		margin-top: var(--space-2);
 		overflow: hidden;
