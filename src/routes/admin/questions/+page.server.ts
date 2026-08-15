@@ -1,7 +1,9 @@
+import { redirect } from '@sveltejs/kit';
 import { dbClient } from '$lib/server/db';
 import { getDomains } from '$lib/server/queries';
 import { listCertifications, listQuestionsPage } from '$lib/server/adminQuestions';
-import type { PageServerLoad } from './$types';
+import { ADMIN_SESSION_COOKIE } from '$lib/server/adminAuth';
+import type { Actions, PageServerLoad } from './$types';
 
 const PAGE_SIZE = 50;
 
@@ -16,4 +18,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		: [];
 
 	return { certifications, activeCert, domains, rows, pageSize: PAGE_SIZE };
+};
+
+export const actions: Actions = {
+	logout: async ({ cookies }) => {
+		cookies.delete(ADMIN_SESSION_COOKIE, { path: '/admin' });
+		redirect(303, '/admin/login');
+	}
 };

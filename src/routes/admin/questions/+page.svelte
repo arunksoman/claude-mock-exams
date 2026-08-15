@@ -3,7 +3,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Plus } from '@lucide/svelte';
+	import { Plus, LogOut } from '@lucide/svelte';
 	import { DIFFICULTIES } from '$lib/constants';
 	import type { Difficulty } from '$lib/types';
 	import type { QuestionListRow } from '$lib/server/adminQuestions';
@@ -119,9 +119,16 @@
 
 <div class="header">
 	<h1>Questions</h1>
-	<button type="button" class="primary" onclick={openCreate} disabled={!data.activeCert}>
-		<Plus size={16} strokeWidth={1.75} /> Add question
-	</button>
+	<div class="header-actions">
+		<button type="button" class="primary" onclick={openCreate} disabled={!data.activeCert}>
+			<Plus size={16} strokeWidth={1.75} /> Add question
+		</button>
+		<form method="POST" action="?/logout">
+			<button type="submit" class="logout-btn">
+				<LogOut size={15} strokeWidth={1.75} /> Log out
+			</button>
+		</form>
+	</div>
 </div>
 
 {#if data.certifications.length === 0}
@@ -219,6 +226,12 @@
 		font-size: 1.4rem;
 	}
 
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
 	.primary {
 		display: inline-flex;
 		align-items: center;
@@ -231,6 +244,24 @@
 		font-weight: 600;
 		font-size: 0.88rem;
 		cursor: pointer;
+	}
+
+	.logout-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+
+	.logout-btn:hover {
+		background: var(--surface-hover);
+		color: var(--text);
 	}
 
 	.primary:disabled {
@@ -260,7 +291,7 @@
 
 	.chip {
 		padding: var(--space-1) var(--space-3);
-		border-radius: 999px;
+		border-radius: 0;
 		border: 1px solid var(--border);
 		background: var(--surface);
 		color: var(--text-secondary);
