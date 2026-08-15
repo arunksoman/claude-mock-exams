@@ -6,9 +6,9 @@
 </script>
 
 <svelte:head>
-	<title>{data.section.title} — CCDV-F Study Notes</title>
-	<meta name="description" content="CCDV-F exam study notes: {data.section.title}." />
+	<title>{data.section.title} — CCAR-F Study Notes</title>
+	<meta name="description" content="CCAR-F exam study notes: {data.section.title}." />
 </svelte:head>
 
 <NotesDomain section={data.section} />
-<NotesPager cert="ccdv-f" code={data.section.code} />
+<NotesPager cert="ccar-f" code={data.section.code} />

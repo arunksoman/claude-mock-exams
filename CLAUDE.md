@@ -57,7 +57,7 @@ a local rebuild does **not** update production; see CONTEXT_MAP.md's
   can create a self-triggering infinite loop — bisect with `git stash` on
   subsets of a change if you hit `effect_update_depth_exceeded` and the
   error itself doesn't point at the cause (it won't).
-- **Study Notes content** (`src/lib/notes/content/*.md`) has its own syntax
+- **Study Notes content** (`src/lib/notes/content/ccdv-f/*.md`) has its own syntax
   contract enforced by a custom renderer — no `#` h1, specific blockquote
   callout labels, `{{term|def}}`/`{{youtube:ID|title}}` syntax, Python-only
   code samples. Full spec is in CONTEXT_MAP.md's "Study Notes" section —
@@ -66,6 +66,19 @@ a local rebuild does **not** update production; see CONTEXT_MAP.md's
   Notes content. Verify via WebSearch/WebFetch first; omit rather than guess
   if it can't be confirmed. (One invented id already slipped through once
   and had to be caught and removed — see CONTEXT_MAP.md.)
+- **"No full-bank loads" also applies to `/admin/questions`.** The admin
+  question table is keyset-paginated (`$lib/server/adminQuestions.ts`) for
+  the exact same reason exam/practice sampling is — don't add a query that
+  pulls the whole `questions`/`choices` tables for the admin UI either.
+- **A bare `<svg>` icon as the sole child of a flex button can collapse to
+  `width: 0`** despite its own `width` attribute — verified via DevTools,
+  not a guess. Give both the button and the icon (`:global(svg)` — it
+  renders inside a child component) `flex-shrink: 0`. See CONTEXT_MAP.md's
+  admin section for the full writeup.
+- **Don't `git mv` route files while `pnpm run dev` is running** without
+  expecting to have to restart it — SvelteKit's type-sync watcher can throw
+  an uncaught `ENOENT` mid-rename that kills the whole Node process, not
+  just triggers a reload.
 
 ## Verifying UI changes
 
@@ -76,9 +89,12 @@ check looks wrong only in a headless screenshot, re-verify with
 `chromium.launch({ headless: false })` against a local Chrome install before
 concluding there's a real issue.
 
-For anything touching `/practice` or `/exam` end to end (not just `/notes`),
-starting a session requires the live Turso connection in `.env` — there's no
-local-only fixture data path.
+For anything touching `/practice/ccdv-f` or `/exam/ccdv-f` end to end (not
+just `/notes/ccdv-f`), starting a session requires the live Turso connection
+in `.env` — there's no local-only fixture data path. Same for
+`/admin/questions`: it reads/writes the live Turso DB directly, no local
+fixture — be deliberate about test writes there (create+delete cleanly,
+don't leave test rows behind).
 
 ## Where things live
 
@@ -94,3 +110,14 @@ See CONTEXT_MAP.md's "Repository layout" for the full tree. Quick pointers:
 - Shared choice-answering UI: `$lib/components/ChoicePicker.svelte` (used by
   both practice and exam modes — includes select-N capping and the
   strike-off/eliminate-distractors feature).
+- Routes are namespaced per certification: `/practice/ccdv-f`,
+  `/exam/ccdv-f`, `/notes/ccdv-f` (mirrors each other on purpose — adding
+  CCAR-F later means adding sibling `.../ccar-f` routes + content, not
+  restructuring). `/` is a cert picker, `/ccdv-f` is the CCDV-F hub linking
+  to all three. CCAR-F is a disabled "Coming soon" placeholder in the header
+  dropdowns and on the home page — no DB rows or routes exist for it yet.
+- Admin question CRUD (browse/edit/create/delete + jsonl preview-then-commit
+  bulk upload): `$lib/server/adminQuestions.ts`, `$lib/server/adminImport.ts`,
+  `src/routes/admin/questions/`. See CONTEXT_MAP.md's Admin section before
+  touching the virtualized table or the panel — several non-obvious
+  TanStack/Svelte gotchas are documented there.

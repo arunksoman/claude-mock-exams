@@ -17,13 +17,14 @@
 	let examGroupOpen = $state(false);
 	let notesGroupOpen = $state(false);
 
-	// Practice/Mock Exam/Study Notes are each a CCDV-F link today, with CCAR-F as a disabled
-	// "Coming soon" entry — only CCDV-F has real content/routes so far.
+	// Practice/Mock Exam are still CCDV-F-only with CCAR-F as a disabled "Coming soon" entry (no
+	// question bank exists for CCAR-F yet). Study Notes now has real CCAR-F content/routes too.
 	const homeHref = resolve('/');
 	const historyHref = resolve('/history');
 	const practiceHref = resolve('/practice/ccdv-f');
 	const examHref = resolve('/exam/ccdv-f');
 	const notesHref = resolve('/notes/ccdv-f');
+	const notesCcarHref = resolve('/notes/ccar-f');
 
 	function isActive(href: string): boolean {
 		if (href === '/') return page.url.pathname === '/';
@@ -123,10 +124,7 @@
 				{#if openDropdown === 'notes'}
 					<div class="dropdown group-dropdown" role="menu">
 						<a href={notesHref} role="menuitem" onclick={() => (openDropdown = null)}>CCDV-F</a>
-						<span class="disabled-item" role="menuitem" aria-disabled="true">
-							<span class="label">CCAR-F</span>
-							<span class="badge">Coming soon</span>
-						</span>
+						<a href={notesCcarHref} role="menuitem" onclick={() => (openDropdown = null)}>CCAR-F</a>
 					</div>
 				{/if}
 			</div>
@@ -253,10 +251,15 @@
 								>
 									CCDV-F
 								</a>
-								<span class="disabled-item group-sub-link" role="menuitem" aria-disabled="true">
-									<span class="label">CCAR-F</span>
-									<span class="badge">Coming soon</span>
-								</span>
+								<a
+									href={notesCcarHref}
+									class="group-sub-link"
+									class:active={isNotesActive()}
+									role="menuitem"
+									onclick={() => (menuOpen = false)}
+								>
+									CCAR-F
+								</a>
 							{/if}
 
 							<div class="divider"></div>

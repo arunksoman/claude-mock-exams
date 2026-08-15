@@ -31,16 +31,33 @@ claude_certification/
 │   ├── markdownify.py        # adds backtick code-span formatting to question/choice text, in place
 │   └── rebalance_difficulty.py  # redistributes difficulty labels directly in the db (not the JSONL)
 ├── src/
-│   ├── routes/               # pages: /, /practice, /practice/session, /exam, /exam/active, /history, /history/[id],
-│   │                          #   /notes, /notes/[code]  + api/practice/start, api/exam/start, api/exam/submit
+│   ├── routes/
+│   │   ├── +page.svelte             # cert picker: CCDV-F (live) / CCAR-F ("Coming soon", disabled)
+│   │   ├── ccdv-f/+page.svelte       # CCDV-F hub — Study Notes / Practice / Mock Exam cards + attempt stats
+│   │   ├── practice/ccdv-f/          # +page.svelte (setup) + session/+page.svelte
+│   │   ├── exam/ccdv-f/              # +page.svelte (setup/resume) + active/+page.svelte
+│   │   ├── history/, history/[id]/
+│   │   ├── notes/ccdv-f/             # +layout.svelte (sidebar/scrollspy), +page.svelte (overview), [code]/
+│   │   ├── admin/
+│   │   │   ├── +page.server.ts        # redirects (307) to /admin/questions — no dashboard screen anymore
+│   │   │   ├── login/
+│   │   │   └── questions/             # CRUD table + panel + jsonl preview/commit — see "Admin" section below
+│   │   │       ├── +page.server.ts, +page.svelte
+│   │   │       └── api/                # list, [id] (GET/PATCH/DELETE), +server.ts (POST create),
+│   │   │                                #   preview-upload, commit-upload
+│   │   └── api/                       # practice/start, exam/start, exam/submit
 │   └── lib/
 │       ├── components/       # ChoicePicker, ChoiceReview, ScoreBreakdown, Timer, QuestionNav, Markdown,
 │       │                      #   FullscreenToggle, NotesDomain, NotesPager, AppHeader, ThemeToggle, ConfirmDialog
-│       ├── notes/             # domains.ts (static domain metadata) + content/*.md (9 study-notes source files)
+│       │   └── admin/          # QuestionsTable (virtualized), QuestionPanel (modal), UploadPreview,
+│       │                        #   useQuestionsTable.svelte.ts (table-core wrapper)
+│       ├── notes/             # domains.ts (static domain metadata) + content/ccdv-f/*.md (9 study-notes source files)
 │       ├── state/             # theme/practice/exam/history .svelte.ts — runed client state, persisted to localStorage
 │       ├── storage/            # localStorage.ts — versioned key read/write + clearAllAppData()
 │       ├── server/             # db.ts, queries.ts, examSampler.ts, markdown.ts (question bank),
-│       │                        #   notesContent.ts + notesMarkdown.ts (study notes), adminAuth.ts, adminImport.ts
+│       │                        #   notesContent.ts + notesMarkdown.ts (study notes), adminAuth.ts,
+│       │                        #   adminImport.ts (parse/validate/write jsonl), adminQuestions.ts (CRUD queries),
+│       │                        #   questionValidation.ts (validateQuestion(), shared by both admin paths)
 │       ├── scoring.ts           # grading logic (buildGradedQuestion, domain/overall score breakdowns) — universal, not server-only
 │       └── shuffle.ts            # shuffle() + shuffleQuestionChoices() — used by both api/practice/start and api/exam/start
 ├── vite.config.ts            # SvelteKit + adapter-auto (see Deployment)
@@ -161,14 +178,17 @@ python scripts/rebalance_difficulty.py  # re-apply difficulty relabeling after a
   `@libsql/client` reads `db/claude-mock-exams.db` server-side
   (`src/lib/server/db.ts`, `queries.ts`); `marked` + `sanitize-html` render
   question/choice markdown to sanitized HTML (`src/lib/components/Markdown.svelte`).
-- **Modes**: `/practice` (untimed, domain/difficulty filters, reveal-as-you-go)
-  and `/exam` → `/exam/active` (timed 53-question mock exam matching the real
-  exam's shape, flagging, question nav grid, fullscreen). Both write completed
-  attempts to `/history`, backed by localStorage (`src/lib/state/`), not the
-  db's `practice_sessions` tables. `/notes` is a separate, self-contained
-  study-notes reference (see its own section below) — not an exam mode, no
-  scoring, nothing persisted to the DB.
-- **Practice-mode answer flow** (`src/routes/practice/session/+page.svelte`):
+- **Modes**: `/practice/ccdv-f` (untimed, domain/difficulty filters,
+  reveal-as-you-go) and `/exam/ccdv-f` → `/exam/ccdv-f/active` (timed
+  53-question mock exam matching the real exam's shape, flagging, question
+  nav grid, fullscreen). Both write completed attempts to `/history`, backed
+  by localStorage (`src/lib/state/`), not the db's `practice_sessions`
+  tables. `/notes/ccdv-f` is a separate, self-contained study-notes
+  reference (see its own section below) — not an exam mode, no scoring,
+  nothing persisted to the DB. All three routes are namespaced under a
+  `ccdv-f` segment on purpose (see "Multi-cert routing" below) — CCAR-F gets
+  sibling routes later, not a restructure.
+- **Practice-mode answer flow** (`src/routes/practice/ccdv-f/session/+page.svelte`):
   single-choice questions reveal immediately on click. Multi-select
   (`multiple_response`) questions require picking exactly `selectCount`
   choices (capped in `ChoicePicker.svelte` — can't over-select) and pressing
@@ -211,6 +231,19 @@ python scripts/rebalance_difficulty.py  # re-apply difficulty relabeling after a
     variable first, then assign to the reactive store once, with no
     intermediate read of the reactive field in between. Same fix applied
     symmetrically in both `practice.svelte.ts` and `exam.svelte.ts`.
+  - **Same bug family, different shape — a race, not a loop**: submitting a
+    mock exam was auto-exiting back to `/exam/ccdv-f` instead of showing
+    results. Root cause: `completeExam()` used to null `examState.session`
+    *before* the page navigated to `/history/[id]`; the active exam page's
+    own guard effect (`if (!examState.session) goto('/exam/ccdv-f')`) fired
+    on that write and raced the explicit navigation — sometimes winning.
+    Fixed by splitting `completeExam()` (adds to history only) from a new
+    `clearExamSession()` (nulls the session), and calling `clearExamSession()`
+    only *after* `goto()` to the results page has resolved — the guard
+    effect never fires while still on the page. General lesson: a guard
+    effect keyed on "session went null" can't distinguish *why* it went
+    null (user abandoned vs. just-completed-and-navigating-away) unless the
+    caller controls the ordering explicitly.
 - **Reveal correctness scoping** (`ChoiceReview.svelte`): a `revealAll` prop
   (default `true`) controls whether _every_ correct choice is highlighted or
   only the ones the user actually selected. Practice-session's live view
@@ -319,7 +352,7 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   `localStorage.clear()`. See the effect-loop gotcha above before adding any
   new migration/patch-up logic to `initPracticeSession()`/`initExam()`.
 - **Known pre-existing gap, not fixed**: a full browser reload (not a
-  client-side nav) on `/practice/session` or `/exam/active` drops the
+  client-side nav) on `/practice/ccdv-f/session` or `/exam/ccdv-f/active` drops the
   in-progress session and redirects to the setup page — confirmed present
   even on a clean checkout with none of this session's changes, so it's not
   a regression, just an existing limitation. Root cause not investigated;
@@ -330,7 +363,7 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
 - **Responsive/mobile**: header nav (`AppHeader.svelte`) collapses into the
   existing hamburger dropdown below 640px instead of wrapping; the exam's
   53-tile question-number grid (`QuestionNav.svelte`, inside
-  `exam/active/+page.svelte`) is collapsible and defaults collapsed under
+  `exam/ccdv-f/active/+page.svelte`) is collapsible and defaults collapsed under
   720px so it doesn't push the current question below the fold on a phone.
 - **Scrollbars**: a global thin, theme-aware scrollbar (`app.css`, `*` +
   `::-webkit-scrollbar`/`scrollbar-width: thin`) replaces each browser's
@@ -338,23 +371,121 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   in headless-Chromium screenshots regardless of the CSS (a headless-mode
   default, not a bug); verify visually with a real, non-headless browser
   window if touching this again.
+- **Full-page background coverage gotcha** (`app.css`, `.app-shell` in
+  `+layout.svelte`): the natural-looking `html, body { height: 100% }`
+  clips the painted `--bg` to exactly one viewport tall — a page taller
+  than that (e.g. a long Study Notes page) has an unpainted gap below the
+  fold showing the browser's own dark-canvas fill instead of the theme
+  color. The equally natural-looking fix, swapping to `min-height: 100%`,
+  is *also* broken: percentage `min-height` needs the parent (`html`/`body`)
+  to have a *definite* height, which `height: auto` (even with a min-height
+  floor) doesn't reliably provide across browsers — short pages then
+  shrink-wrap to content instead of filling the viewport, same unpainted-gap
+  symptom in the opposite direction. The actual fix: `.app-shell` uses
+  `min-height: 100dvh` (a real viewport unit, not a percentage of an
+  ambiguous parent) — grows for tall content, fills short content, no
+  parent-chain dependency either way. `html { background: var(--bg) }`
+  stays as a cheap safety net.
+- **Design tokens** (`app.css` `:root`): `--accent` is Dodger Blue
+  (`#1e90ff` light theme, `#5aabff` dark — lightened for dark-bg contrast,
+  same pattern the previous green followed). `--success`/`--success-soft`
+  are deliberately a *separate* green family (the "correct answer"
+  indicator) and were not touched when the accent changed — don't conflate
+  the two if asked to retheme again. `--radius-sm/md/lg` are all `0`
+  (square-corners design decision) — since every card/panel/input/table in
+  the app reads from these three tokens, redefining them at the root is
+  the one-edit way to reach "everywhere"; only a handful of components use
+  a *literal* radius instead of the tokens (pill-shaped chips/progress-bar
+  tracks — zeroed individually — and genuine circles: the radio-dot
+  indicator, strike-button, and confirm-dialog icon, all `border-radius:
+  50%`, deliberately left alone since those are circles by design, not
+  "rounded corners"). `button { border-radius: 0 !important }` also exists
+  as a global override, because component-level button classes (`.primary`,
+  `.chip`, ...) set their own `border-radius` on a class selector, which
+  beats a bare `button` element rule on specificity — `!important` is the
+  only way to force it from one place instead of touching every component.
 
-## Study Notes (`/notes`)
+## Multi-certification routing & navigation
+
+`/` is a cert picker (CCDV-F card links to `/ccdv-f`; CCAR-F is a static,
+disabled card with a "Coming soon" badge — no backing data since nothing
+exists for it in the DB). `/ccdv-f` is the hub: Study Notes / Practice /
+Mock Exam cards. Practice, exam, and notes routes are each namespaced under
+a `ccdv-f` path segment (`/practice/ccdv-f`, `/exam/ccdv-f`,
+`/notes/ccdv-f`) precisely so a future CCAR-F gets sibling routes
+(`/practice/ccar-f`, ...) rather than a restructure — this was applied
+retroactively (notes first, then practice/exam) once the pattern proved out.
+CCAR-F has zero `certifications`/`domains` rows in the DB today (no question
+bank exists), so Practice and Mock Exam are still CCDV-F-only — that's a
+content/seeding task, not a routing one. **Study Notes is the exception**:
+`/notes/ccar-f` is live (see "Study Notes" below) since notes are static,
+repo-authored content with no DB dependency — it didn't need to wait on a
+question bank the way Practice/Exam do.
+
+- **Header dropdowns** (`AppHeader.svelte`): Practice and Mock Exam are each
+  a dropdown (desktop, one open at a time via a single `openDropdown` state)
+  / independently-collapsible group (mobile) with a CCDV-F link plus a
+  disabled "Coming soon" CCAR-F entry. **Study Notes now links both** —
+  CCDV-F and CCAR-F are both real `<a>` links, not one live + one disabled.
+  - **Written as three explicit blocks, not a `{#each groups}` loop** —
+    deliberately, after hitting a real `svelte/no-navigation-without-resolve`
+    lint failure: the rule can trace a plain top-level `const x =
+    resolve(...)` used directly as `href={x}`, but not the same resolved
+    string stored as a property on an array of objects and accessed via a
+    loop variable (`href={item.href}`) — too much indirection for its
+    static check, even though the value is provably a `resolve()` result at
+    runtime. If tempted to de-duplicate this into a loop or a snippet
+    again, confirm `pnpm run lint` first — props/snippet-parameters likely
+    hit the same limitation as array properties did.
+- **Don't `git mv` route files while `pnpm run dev` is running**: doing this
+  once crashed the whole dev server — SvelteKit's type-sync watcher does a
+  bare `readFileSync` on changed route files to regenerate `$types`, and hit
+  an uncaught `ENOENT` mid-rename (the old path was gone, the new one not
+  yet indexed), which isn't wrapped in a try/catch anywhere in the vite-dev
+  entrypoint. Kills the Node process outright, not just a reload — restart
+  `pnpm run dev` after any bulk route-file rename.
+
+## Study Notes (`/notes/ccdv-f`, `/notes/ccar-f`)
 
 A self-contained exam-prep reference distinct from practice/exam modes — no
 scoring, nothing DB-backed, nothing persisted. Built to read well for both
 "cramming before the exam" and genuine first-time learning, not just recall
-drills.
+drills. Now covers **two certs**: CCDV-F (Developer) and CCAR-F (Architect,
+added after CCDV-F's launch — the first real use of the multi-cert pattern
+routing was namespaced for from the start).
 
-- **Content source** — `src/lib/notes/content/*.md`: `overview.md` plus one
-  file per exam domain (`applications-integration.md`,
+- **Content source** — `src/lib/notes/content/<cert>/*.md`, one folder per
+  cert (`content/ccdv-f/`, `content/ccar-f/`): each is `overview.md` plus one
+  file per exam domain. CCDV-F: `applications-integration.md`,
   `model-selection-optimization.md`, `agents-workflows.md`,
   `prompt-context-engineering.md`, `tools-mcps.md`, `security-safety.md`,
-  `claude-code.md`, `eval-testing-debugging.md`). Filenames must match the
-  domain `code` values wired into `src/lib/notes/domains.ts` — that file
-  (not the presence of a `.md` file alone) is the source of truth for which
-  domains appear, their titles, weights, and sidebar order. Adding a new
-  domain means updating both.
+  `claude-code.md`, `eval-testing-debugging.md`. CCAR-F:
+  `agentic-architecture.md`, `claude-code-config.md`,
+  `prompt-structured-output.md`, `tool-design-mcp.md`,
+  `context-management-reliability.md`. Filenames must match the domain
+  `code` values wired into `src/lib/notes/domains.ts` — that file (not the
+  presence of a `.md` file alone) is the source of truth for which domains
+  appear, their titles, weights, and sidebar order, keyed per cert in a
+  `CERT_DOMAINS` record. Adding a domain to an existing cert means updating
+  both; adding a whole new cert means adding a `CERT_DOMAINS[code]` entry,
+  a `content/<cert>/` folder, and a sibling `routes/notes/<cert>/` tree
+  (layout + `+page.server.ts`/`+page.svelte` + `[code]/` — copy the ccdv-f
+  or ccar-f tree verbatim and swap the hardcoded cert string in the layout's
+  `hrefFor`/`isActive` and the two `+page.server.ts` loaders).
+- **`getNotesSection(cert, code)`** (`$lib/server/notesContent.ts`) and the
+  `domains.ts` helpers (`domainsFor`, `titleFor`, `weightFor`,
+  `domainOrderFor`) all take an explicit `cert` argument now — genericized
+  from a CCDV-F-only single-cert module when CCAR-F notes were added. The
+  `import.meta.glob` in `notesContent.ts` is `content/*/*.md` (cert and code
+  both come from the matched path), and the per-section render cache is
+  keyed `${cert}/${code}`.
+- **CCAR-F's exam blueprint (domains + weight percentages) is
+  crowdsourced/third-party**, not from an Anthropic-published official
+  guide — cross-checked across two independent community sources
+  (`daronyondem/claude-architect-exam-guide` on GitHub and
+  claudecertificationguide.com) that agreed exactly on all 5 domains and
+  weights (27/20/20/18/15) before being used. If Anthropic publishes an
+  official blueprint later, diff against it — third-party numbers drift.
 - **Authoring syntax** (enforced by the custom renderer, `$lib/server/notesMarkdown.ts`):
   - No `#` (h1) in content files — the page itself renders the domain title
     as `<h1>`; content starts at `##`.
@@ -429,7 +560,7 @@ drills.
     `max-width` style), none of which resolves to anything sensible inside
     a larger modal, so the modal was rendering blank until this was added.
 - **Layout & navigation** (`src/routes/notes/+layout.svelte`, shared across
-  `/notes` and `/notes/[code]`):
+  `/notes/ccdv-f` and `/notes/ccdv-f/[code]`):
   - Left sidebar (desktop, sticky, its own scroll — needed an explicit
     `overflow-y: auto` since `max-height` alone doesn't imply scrolling) /
     off-canvas drawer with a backdrop (mobile, triggered by a small sticky
@@ -458,12 +589,14 @@ drills.
   goes stale or gets misremembered, and this is exam-prep content where
   precision matters.
 
-## Admin (`/admin`)
+## Admin (`/admin`, `/admin/questions`)
 
-A single-admin content-upload surface — not a general CMS. Auth is
-intentionally minimal ("for now," per the original ask): credentials come
-straight from env vars, no user table, no password hashing/rotation, no
-rate-limiting/lockout on failed attempts.
+Single-admin content management — not a general CMS. Auth is intentionally
+minimal ("for now," per the original ask): credentials come straight from
+env vars, no user table, no password hashing/rotation, no rate-limiting/
+lockout on failed attempts. `/admin` itself is just a `307` redirect to
+`/admin/questions` (the old stats-dashboard landing screen was removed —
+"don't need the summary screen, show the table right away").
 
 - **Credentials**: `.env`'s `ADMIN_USER` / `ADMIN_PASS` (plain values, compared
   with a fixed-length SHA-256 hash + `timingSafeEqual` in
@@ -479,40 +612,121 @@ rate-limiting/lockout on failed attempts.
   store would need external storage anyway — a signed cookie sidesteps that
   entirely.
 - **The auth guard lives in `src/hooks.server.ts`, not a `+layout.server.ts`
-  load function** — this is deliberate and load-bearing. SvelteKit's own docs
-  confirm `handle` runs _before_ a form action is invoked, while a layout's
-  `load` only runs _after_ an action's side effects, to render the resulting
-  page. A guard in `load` would not stop an unauthenticated `POST` straight
-  to `/admin?/upload` from executing first. Verified directly: an
-  unauthenticated POST to the upload action returns SvelteKit's
-  redirect-result JSON with no `uploadResult` in it, and a DB check
-  afterward confirmed zero rows were written.
-- **Upload flow** (`/admin`, form actions in `+page.server.ts`,
-  `$lib/server/adminImport.ts`): accepts a `.jsonl` file (one question object
-  per line, same shape as `data/ccdv-f/*.jsonl` / `scripts/import.py`'s
-  format), 10MB cap. Every line is parsed and validated up front using the
-  _same rules as `scripts/import.py`_ (domain code must exist, valid
-  type/difficulty, ≥2 choices, correct-count matches `select`,
-  `single_choice`⇒select=1, `multiple_response`⇒select≥2, etc.) — **if any
-  line fails, nothing is written at all**, so a partially-bad file can never
-  half-corrupt the bank. On success, all writes for the file happen in one
-  `client.transaction('write')`.
-  - **Upsert semantics** (this is where it differs from `import.py`, which is
-    insert-only and errors on a duplicate `external_key`): a question with a
-    matching `external_key` is updated in place — its fields are overwritten
-    and its choices are deleted and re-inserted from the upload — which is
-    what makes this useful as a _correction_ workflow, not just an
-    additive one. Questions without an `external_key` are always inserted as
-    new, matching `import.py`.
-  - Topics and tags are get-or-created the same way `import.py` does
-    (scoped to `domain_id` for topics, global for tags).
-  - Verified end-to-end against live Turso: create, update-in-place (old
-    choices fully replaced, not accumulated), and atomic rejection (one bad
-    line in an otherwise-valid file writes zero rows) all behave as
-    documented above.
-- **Not built**: editing/deleting individual questions through the UI,
-  picking a certification (hardcoded to `DEFAULT_CERT_CODE`, fine while
-  CCDV-F is the only one), any audit log of who uploaded what.
+  load function** — this is deliberate and load-bearing, and covers
+  everything under `/admin/*` including the newer `/admin/questions/api/*`
+  routes via a `pathname.startsWith('/admin')` prefix check (no route-by-route
+  wiring needed). SvelteKit's own docs confirm `handle` runs _before_ a form
+  action or API route handler is invoked, while a layout's `load` only runs
+  _after_ an action's side effects, to render the resulting page — a guard in
+  `load` would not stop an unauthenticated `POST` from executing first.
+  Verified directly against the old upload action: an unauthenticated POST
+  returned SvelteKit's redirect-result JSON with no result payload, and a DB
+  check afterward confirmed zero rows were written.
+
+### Question CRUD (`/admin/questions`)
+
+Browse/search/edit/create/delete individual questions, plus a bulk `.jsonl`
+upload that previews the whole batch before writing anything.
+
+- **Shared validation & write path** — the single most important thing to
+  know before touching this: `$lib/server/questionValidation.ts` exports
+  `validateQuestion()` (mirrors `scripts/import.py`'s rules exactly — domain
+  code must exist, valid type/difficulty, ≥2 choices, correct-count matches
+  `select`, etc.), and `$lib/server/adminImport.ts` exports
+  `writeOneQuestion()` (topic/tag get-or-create, question upsert, choices
+  delete+reinsert, all inside a caller-supplied transaction). Both the
+  single-question CRUD path (`adminQuestions.ts#saveQuestion`) and the bulk
+  jsonl commit path (`adminImport.ts#writeValidatedQuestions`) call the same
+  two functions — there is exactly one place that knows how a question gets
+  validated and exactly one place that knows how it gets written. Don't
+  reimplement either inline in a route handler.
+- **Listing** (`adminQuestions.ts#listQuestionsPage`, `api/list/+server.ts`):
+  keyset-paginated (`WHERE id > ? ORDER BY id LIMIT ?`), bounded columns
+  only, optional domain/difficulty/type/search filters — same "no full-bank
+  load" discipline as exam/practice sampling, just for the admin surface.
+  `getQuestionDetail()` (full question + choices, raw text not rendered
+  HTML — this is the editor, not the exam-delivery surface) is fetched only
+  when a row is opened.
+- **Table + virtualization** (`$lib/components/admin/`): `@tanstack/
+  table-core` **v8.21.3** pinned deliberately, not v9 — the docs originally
+  linked were v8's, and v8's Svelte *adapter* package requires Svelte 3/4,
+  but `table-core` itself (the framework-agnostic engine, no Svelte peer
+  dep at all) works fine standalone regardless. v9's `table-core` was
+  checked too and rejected: it's a full plugin/feature-composition rewrite
+  (`tableFeatures`, `constructTable`, no simple `createTable(options)`),
+  meaningfully heavier than what's needed here. `@tanstack/svelte-virtual`
+  handles row virtualization. Only column defs + header-group rendering are
+  used from table-core — no sorting/filtering features enabled (the server
+  owns filtering; rows are always `ORDER BY id` for the keyset cursor to
+  work).
+  - **Bare `createTable()` doesn't self-populate per-feature default
+    state** the way a framework adapter (`useReactTable` etc.) normally
+    does — crashed `getHeaderGroups()` with `Cannot read properties of
+    undefined (reading 'left')` (a column-pinning feature reading state
+    that was never populated). Fix, in `useQuestionsTable.svelte.ts`:
+    merge `table.initialState` into the controlled `$state` once right
+    after construction, then push it back via one `table.setOptions()` call
+    — replicates by hand what a real adapter does on mount.
+  - **`@tanstack/svelte-virtual`'s `setOptions()` always force-emits a new
+    store value**, even when the visible range doesn't change (its own
+    source comment: "in case count increased but scroll position stayed
+    the same"). An `$effect` that reads `$virtualizer` (store
+    auto-subscription syntax) to call `.setOptions()` on it therefore
+    depends on its own output — infinite synchronous loop, froze the tab.
+    Fix: grab the instance once via `get(virtualizer)` from `svelte/store`
+    (untracked, plain reference) and call `.setOptions()` on *that*, never
+    through `$virtualizer` — the template can still read `$virtualizer`
+    freely for re-render, since that direction was never the problem.
+- **Panel** (`QuestionPanel.svelte`): a centered modal (`min(900px, 100%)`
+  wide, up to `88vh` tall, dimmed backdrop, click-outside/Escape to close —
+  not the app's usual right-docked drawer pattern, changed on request).
+  View mode shows choices with correct/incorrect + reasoning, explanation,
+  reference, tags; Edit mode is the same field set as the jsonl shape
+  (domain/type/difficulty/select/stem/explanation/reference/external_key/
+  topic/tags/choices), with `select_count` auto-derived from how many
+  choice checkboxes are checked rather than typed separately, to avoid a
+  whole class of "select doesn't match correct-count" validation errors.
+  Delete reuses `ConfirmDialog.svelte`.
+  - Panel/backdrop surface colors: `.panel` uses `var(--bg)`, its inputs use
+    `var(--surface)` — this was flipped once (panel→`--surface`,
+    inputs→`--bg`) to fix a "modal blends into the backdrop" contrast issue
+    in dark theme, then flipped back on explicit feedback that the original
+    pairing looked better. If revisiting this, check contrast in dark theme
+    specifically before changing it again — it's the tightest constraint.
+  - **A bare `<svg>` icon as the sole child of a flex button can collapse
+    to `width: 0`** despite an explicit `width="18"` HTML attribute —
+    confirmed via DevTools (`0 × 18` in the computed box, not a guess). Fix:
+    `flex-shrink: 0` on the button *and* on the icon itself via
+    `.icon-btn :global(svg)` (the icon renders inside a child component, so
+    it needs an explicit `:global()` to reach past this file's scoped CSS).
+- **Bulk upload — preview then commit, not write-on-upload** (a deliberate
+  change from the old behavior): `UploadPreview.svelte` posts the `.jsonl`
+  file to `api/preview-upload` (parses + validates via
+  `parseAndValidateJsonl()`, returns the batch — **no DB write**) for
+  review, then posts the *same file* again to `api/commit-upload`, which
+  re-parses and re-validates from scratch server-side (never trusts a
+  client-supplied "already validated" claim) before calling
+  `writeValidatedQuestions()` in one transaction. If any line fails
+  validation at either step, nothing is written — same all-or-nothing
+  guarantee `import.py` and the old upload action had.
+  - Upsert semantics unchanged from the original upload flow: a question
+    with a matching `external_key` is updated in place (choices deleted +
+    re-inserted, not accumulated); one without is always inserted as new.
+    Topics/tags are get-or-created the same way `import.py` does.
+- **CCAR-F**: the cert selector reads whatever's in the `certifications`
+  table — today that's only CCDV-F. No CCAR-F rows are seeded anywhere;
+  it'll appear in the admin UI automatically once it has real
+  `certifications`/`domains` rows (a content/seeding task, not an
+  admin-tooling one).
+- **Not built**: column sorting in the table (rows are always `id`-ordered,
+  a deliberate scope cut — keyset pagination needs a stable order anyway),
+  per-row cherry-picking within a bulk-upload preview (it's commit-all or
+  cancel), any audit log of who edited/uploaded what.
+- **Gotcha, not code**: a `git mv` of route files while `pnpm run dev` is
+  watching crashed the whole dev server once (see "Multi-certification
+  routing" above) — happened while moving `practice`/`exam` routes, not
+  specific to admin, but worth knowing if reorganizing `admin/questions/`
+  routes later too.
 
 ## Deployment (Vercel)
 
@@ -568,3 +782,16 @@ rate-limiting/lockout on failed attempts.
   files were grounded against live docs at write time, but nothing re-verifies
   them later if upstream docs change (e.g. Claude Code's CLAUDE.md/settings
   schema, which moves fast).
+- **Pre-existing `prettier --check` debt** in ~46 files unrelated to the
+  admin/routing work above (noticed via a full `pnpm run lint` run, not
+  introduced by it — every file actually touched during that work was
+  individually reformatted and lints clean). Not investigated/fixed; a
+  blanket `pnpm run format` would resolve it but hasn't been run since it'd
+  touch far more than any single task's scope.
+- `+page.server.ts` (and `+page.svelte`) files only accept a fixed export
+  allow-list (`load`, `actions`, `prerender`, `csr`, `ssr`,
+  `trailingSlash`, `config`, `entries`, or anything `_`-prefixed) — an
+  incidental `export const PAGE_SIZE = 50` in `admin/questions/+page.server.ts`
+  crashed the dev server outright the moment that route was hit ("Invalid
+  export"), not just a type error `pnpm run check` would catch. Keep
+  route-local constants un-exported.

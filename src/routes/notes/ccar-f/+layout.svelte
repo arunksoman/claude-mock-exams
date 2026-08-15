@@ -7,9 +7,9 @@
 	import { PanelLeftOpen, PanelLeftClose, ChevronDown, ChevronUp } from '@lucide/svelte';
 	import FullscreenToggle from '$lib/components/FullscreenToggle.svelte';
 	import { domainsFor } from '$lib/notes/domains';
-
-	const DOMAINS = domainsFor('ccdv-f');
 	import type { HeadingEntry } from '$lib/server/notesMarkdown';
+
+	const DOMAINS = domainsFor('ccar-f');
 
 	let { children } = $props();
 
@@ -20,14 +20,14 @@
 
 	function hrefFor(code: string) {
 		return code === 'overview'
-			? resolve('/notes/ccdv-f')
-			: resolve('/notes/ccdv-f/[code]', { code });
+			? resolve('/notes/ccar-f')
+			: resolve('/notes/ccar-f/[code]', { code });
 	}
 
 	function isActive(code: string): boolean {
 		const path = page.url.pathname;
-		if (code === 'overview') return path === '/notes/ccdv-f' || path === '/notes/ccdv-f/';
-		return path === `/notes/ccdv-f/${code}` || path.startsWith(`/notes/ccdv-f/${code}/`);
+		if (code === 'overview') return path === '/notes/ccar-f' || path === '/notes/ccar-f/';
+		return path === `/notes/ccar-f/${code}` || path.startsWith(`/notes/ccar-f/${code}/`);
 	}
 
 	function closeSidebar() {

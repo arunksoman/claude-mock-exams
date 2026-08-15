@@ -1,22 +1,24 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { DOMAINS } from '$lib/notes/domains';
+	import { domainsFor } from '$lib/notes/domains';
 
 	interface Props {
+		cert: 'ccdv-f' | 'ccar-f';
 		code: string;
 	}
 
-	let { code }: Props = $props();
+	let { cert, code }: Props = $props();
 
 	function hrefFor(c: string) {
 		return c === 'overview'
-			? resolve('/notes/ccdv-f')
-			: resolve('/notes/ccdv-f/[code]', { code: c });
+			? resolve(cert === 'ccar-f' ? '/notes/ccar-f' : '/notes/ccdv-f')
+			: resolve(cert === 'ccar-f' ? '/notes/ccar-f/[code]' : '/notes/ccdv-f/[code]', { code: c });
 	}
 
-	let index = $derived(DOMAINS.findIndex((d) => d.code === code));
-	let prev = $derived(index > 0 ? DOMAINS[index - 1] : undefined);
-	let next = $derived(index >= 0 && index < DOMAINS.length - 1 ? DOMAINS[index + 1] : undefined);
+	let domains = $derived(domainsFor(cert));
+	let index = $derived(domains.findIndex((d) => d.code === code));
+	let prev = $derived(index > 0 ? domains[index - 1] : undefined);
+	let next = $derived(index >= 0 && index < domains.length - 1 ? domains[index + 1] : undefined);
 </script>
 
 <nav class="pager" aria-label="Domain navigation">

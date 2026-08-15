@@ -6,10 +6,10 @@
 </script>
 
 <svelte:head>
-	<title>Study Notes — CCDV-F</title>
+	<title>Study Notes — CCAR-F</title>
 	<meta
 		name="description"
-		content="Points-to-ponder study notes covering every CCDV-F exam domain: applications & integration, model selection, agents & workflows, prompt engineering, tools & MCP, security, Claude Code, and evaluation."
+		content="Points-to-ponder study notes covering every CCAR-F exam domain: agentic architecture & orchestration, Claude Code configuration, prompt engineering & structured output, tool design & MCP integration, and context management & reliability."
 	/>
 </svelte:head>
 
@@ -26,7 +26,7 @@
 </p>
 
 <NotesDomain section={data.section} />
-<NotesPager cert="ccdv-f" code={data.section.code} />
+<NotesPager cert="ccar-f" code={data.section.code} />
 
 <style>
 	.lead {
