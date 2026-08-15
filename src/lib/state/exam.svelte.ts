@@ -80,7 +80,7 @@ export function gotoExamIndex(index: number): void {
 /**
  * Stores the graded result from /api/exam/submit into history. Deliberately does NOT clear
  * `examState.session` here — the active exam page's own guard effect (`if (!examState.session)
- * goto('/exam')`) reacts to that field, and nulling it while still on that page races the
+ * goto('/exam/ccdv-f')`) reacts to that field, and nulling it while still on that page races the
  * caller's explicit navigation to the results page, occasionally winning and bouncing the user
  * back to the exam intro instead of showing results. Call `clearExamSession()` only after
  * navigating away.

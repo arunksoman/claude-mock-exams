@@ -46,7 +46,7 @@
 			if (!res.ok) throw new Error('Failed to start practice session');
 			const body = (await res.json()) as { config: PracticeConfig; questions: QuestionFull[] };
 			startPracticeSession(data.certification.code, body.config, body.questions);
-			await goto(resolve('/practice/session'));
+			await goto(resolve('/practice/ccdv-f/session'));
 		} catch {
 			errorMsg = 'Something went wrong starting the session. Please try again.';
 		} finally {

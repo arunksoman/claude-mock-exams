@@ -23,7 +23,7 @@
 	let { data } = $props();
 
 	$effect(() => {
-		if (browser && !examState.session) goto(resolve('/exam'));
+		if (browser && !examState.session) goto(resolve('/exam/ccdv-f'));
 	});
 
 	const session = $derived(examState.session);

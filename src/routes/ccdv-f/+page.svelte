@@ -49,7 +49,7 @@
 		<p>A full domain-by-domain reference to read or cram from before you practice.</p>
 	</a>
 
-	<a class="mode-card" href={resolve('/practice')}>
+	<a class="mode-card" href={resolve('/practice/ccdv-f')}>
 		<div class="icon"><BookOpen size={22} strokeWidth={1.75} /></div>
 		<h2>Practice Mode</h2>
 		<p>
@@ -58,7 +58,7 @@
 		</p>
 	</a>
 
-	<a class="mode-card" href={resolve('/exam')}>
+	<a class="mode-card" href={resolve('/exam/ccdv-f')}>
 		<div class="icon"><GraduationCap size={22} strokeWidth={1.75} /></div>
 		<h2>Mock Exam</h2>
 		<p>

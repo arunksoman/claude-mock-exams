@@ -18,7 +18,7 @@
 	let { data } = $props();
 
 	$effect(() => {
-		if (browser && !practiceState.session) goto(resolve('/practice'));
+		if (browser && !practiceState.session) goto(resolve('/practice/ccdv-f'));
 	});
 
 	const session = $derived(practiceState.session);

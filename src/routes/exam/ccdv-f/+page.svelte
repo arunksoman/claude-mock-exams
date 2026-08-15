@@ -26,7 +26,7 @@
 				questions: QuestionPublic[];
 			};
 			startExam(body);
-			await goto(resolve('/exam/active'));
+			await goto(resolve('/exam/ccdv-f/active'));
 		} catch {
 			errorMsg = 'Could not start the exam. Please try again.';
 		} finally {
@@ -35,7 +35,7 @@
 	}
 
 	async function resume() {
-		await goto(resolve('/exam/active'));
+		await goto(resolve('/exam/ccdv-f/active'));
 	}
 </script>
 
