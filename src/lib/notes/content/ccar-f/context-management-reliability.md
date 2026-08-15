@@ -173,3 +173,11 @@ triggers and handoff structure; Developer Productivity and CI scenarios
 draw on the scratchpad/manifest-export side of context management (large
 codebases, `/compact`, crash-recoverable state) — see the Claude Code
 Configuration domain for those specifics.
+
+### Further reading
+
+- [Context windows](https://platform.claude.com/docs/en/build-with-claude/context-windows) — how the context window is composed, context rot, and overflow behavior.
+- [Compaction](https://platform.claude.com/docs/en/build-with-claude/compaction) — server-side automatic context compaction on the Messages API.
+- [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) — `cache_control`, breakpoints, and cache economics.
+- [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — structured note-taking and sub-agent strategies for long-running work.
+- [API errors reference](https://platform.claude.com/docs/en/api/errors) — HTTP error codes and error-type reference for retry/recovery logic.

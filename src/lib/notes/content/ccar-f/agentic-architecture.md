@@ -202,3 +202,12 @@ parallel launch of independent research subagents, provenance requirements
 on returned claims, and recovery behavior when one subagent's search comes
 back empty vs. fails outright (empty ≠ failure — don't conflate them in the
 coordinator's handling).
+
+### Further reading
+
+- [Building Effective Agents](https://www.anthropic.com/engineering/building-effective-agents) — the canonical source for workflows vs. agents and the five orchestration patterns.
+- [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) — compaction, structured note-taking, and sub-agent strategies for long-running agents.
+- [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) — built-in tools, context management, permissions, sessions, sub-agents.
+- [Create custom subagents](https://code.claude.com/docs/en/sub-agents) — the full `.claude/agents/*.md` file format, frontmatter fields, scopes, hooks.
+- [Subagents in the SDK](https://code.claude.com/docs/en/agent-sdk/subagents) — defining subagents programmatically with `AgentDefinition`, invoking and restricting them.
+- [Tool use overview](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) — the tool-use loop and `stop_reason` mechanics underlying the loop-control section above.

@@ -182,3 +182,14 @@ retryable, needs a human-readable explanation) from transient ones (retry
 with backoff), structured escalation-worthy tool output (`requires_review`
 plus reason), and MCP resource use for exposing a knowledge base without
 burning tool calls on repeated lookups.
+
+### Further reading
+
+- [Tool use overview](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) — tool definitions, client vs. server tools, pricing.
+- [Define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools) — `tool_choice` modes, description best practices, forcing tool use.
+- [Handle tool calls](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls) — `tool_result` formatting and `is_error` handling.
+- [Troubleshooting tool use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/troubleshooting-tool-use) — symptom-to-fix tables for common tool-use errors.
+- [MCP connector](https://platform.claude.com/docs/en/agents-and-tools/mcp-connector) — calling remote MCP servers directly from the Messages API.
+- [Model Context Protocol — architecture overview](https://modelcontextprotocol.io/docs/2026-07-28/learn/architecture) — hosts/clients/servers, primitives, transports.
+- [Build an MCP server](https://modelcontextprotocol.io/docs/2026-07-28/develop/build-server) — official step-by-step server tutorial.
+- [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) — testing and debugging MCP servers.

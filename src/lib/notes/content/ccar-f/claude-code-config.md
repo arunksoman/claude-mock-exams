@@ -155,3 +155,12 @@ user-vs-team trap above), plan mode vs. direct execution triggers, and
 session-resumption flag selection for a stated workflow (e.g. "two engineers
 need to explore different fixes for the same bug starting from the same
 context" → `--fork-session`, not `--continue` twice).
+
+### Further reading
+
+- [Claude Code overview](https://code.claude.com/docs/en/overview) — what Claude Code is, install methods, surfaces, and workflow integrations.
+- [How Claude remembers your project](https://code.claude.com/docs/en/memory) — full `CLAUDE.md` hierarchy, `.claude/rules/`, imports, and auto memory.
+- [Extend Claude with skills](https://code.claude.com/docs/en/skills) — `SKILL.md` structure, frontmatter reference, `context: fork`, `allowed-tools`.
+- [Slash commands reference](https://code.claude.com/docs/en/commands) — the full built-in command list and custom-command locations.
+- [CLI reference](https://code.claude.com/docs/en/cli-reference) — every flag, session management (`--continue`, `--resume`, `--fork-session`), output formats, scripting.
+- [Settings](https://code.claude.com/docs/en/settings) — `settings.json` fields, `permissions.deny`, file locations, precedence.

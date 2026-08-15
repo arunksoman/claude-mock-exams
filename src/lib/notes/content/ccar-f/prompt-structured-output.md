@@ -172,3 +172,11 @@ This scenario bank leans almost entirely on this domain: schema design with
 nullable fields, `tool_choice` semantics for unknown-document-type
 extraction, the three-layer (schema/semantic/provenance) validation model,
 and the validation-feedback-loop pattern for correcting failed extractions.
+
+### Further reading
+
+- [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) — system prompts, few-shot examples, XML tag structuring, long-context ordering.
+- [Structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs) — `output_config.format`, JSON Schema support/limits, strict tool use, and validation guarantees.
+- [Define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools) — `tool_choice` modes (`auto`/`any`/named/`none`) and forcing tool use.
+- [Handling stop reasons](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons) — the full `stop_reason` list and recommended handling per reason.
+- [Batch processing](https://platform.claude.com/docs/en/build-with-claude/batch-processing) — full batch lifecycle, JSONL result shape, `custom_id`, and per-request limits.
