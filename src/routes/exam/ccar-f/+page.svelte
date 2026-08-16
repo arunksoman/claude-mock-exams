@@ -32,7 +32,7 @@
 				questions: QuestionPublic[];
 			};
 			startExam({ ...body, certCode: data.certification.code });
-			await goto(resolve('/exam/ccdv-f/active'));
+			await goto(resolve('/exam/ccar-f/active'));
 		} catch {
 			errorMsg = 'Could not start the exam. Please try again.';
 		} finally {
@@ -41,7 +41,7 @@
 	}
 
 	async function resume() {
-		await goto(resolve('/exam/ccdv-f/active'));
+		await goto(resolve('/exam/ccar-f/active'));
 	}
 </script>
 

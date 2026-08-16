@@ -136,6 +136,7 @@ export interface PracticeInProgress {
 /** localStorage shape for an in-progress exam — questions here are QuestionPublic, never QuestionFull. */
 export interface ExamInProgress {
 	attemptId: string;
+	certCode: string;
 	startedAt: number;
 	durationMinutes: number;
 	questions: QuestionPublic[];

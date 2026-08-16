@@ -1,5 +1,5 @@
 import { browser } from '$app/environment';
-import { STORAGE_KEYS } from '$lib/constants';
+import { DEFAULT_CERT_CODE, STORAGE_KEYS } from '$lib/constants';
 import { readJSON, remove, writeJSON } from '$lib/storage/localStorage';
 import type { ExamAttempt, ExamInProgress, QuestionPublic } from '$lib/types';
 import { addAttempt } from './history.svelte';
@@ -21,17 +21,21 @@ export function initExam(): void {
 	const restored = readJSON<ExamInProgress>(STORAGE_KEYS.examInProgress);
 	// Sessions saved before the strike-off feature existed won't have this field.
 	if (restored && !restored.struck) restored.struck = {};
+	// Sessions saved before cert-tagging existed won't have this field.
+	if (restored && !restored.certCode) restored.certCode = DEFAULT_CERT_CODE;
 	examState.session = restored;
 }
 
 export function startExam(payload: {
 	attemptId: string;
+	certCode: string;
 	startedAt: number;
 	durationMinutes: number;
 	questions: QuestionPublic[];
 }): void {
 	examState.session = {
 		attemptId: payload.attemptId,
+		certCode: payload.certCode,
 		startedAt: payload.startedAt,
 		durationMinutes: payload.durationMinutes,
 		questions: payload.questions,

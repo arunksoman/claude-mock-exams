@@ -2,11 +2,12 @@ import { json } from '@sveltejs/kit';
 import { dbClient, getCertMeta } from '$lib/server/db';
 import { sampleQuestions } from '$lib/server/queries';
 import { shuffleQuestionChoices } from '$lib/shuffle';
-import { DIFFICULTIES, PRACTICE_MAX_COUNT } from '$lib/constants';
+import { DEFAULT_CERT_CODE, DIFFICULTIES, PRACTICE_MAX_COUNT } from '$lib/constants';
 import type { Difficulty, PracticeConfig } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 interface RequestBody {
+	cert?: unknown;
 	domainIds?: unknown;
 	difficulties?: unknown;
 	count?: unknown;
@@ -15,6 +16,7 @@ interface RequestBody {
 export const POST: RequestHandler = async ({ request }) => {
 	const body = (await request.json()) as RequestBody;
 
+	const certCode = typeof body.cert === 'string' ? body.cert : DEFAULT_CERT_CODE;
 	const domainIds = Array.isArray(body.domainIds)
 		? body.domainIds.filter((id): id is number => typeof id === 'number')
 		: [];
@@ -22,7 +24,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		? body.difficulties.filter((d): d is Difficulty => DIFFICULTIES.includes(d as Difficulty))
 		: [];
 
-	const { certification } = await getCertMeta();
+	const { certification } = await getCertMeta(certCode);
 
 	const requestedCount = Number(body.count);
 	// Clamped server-side too — never trust the client's count, even though the UI only

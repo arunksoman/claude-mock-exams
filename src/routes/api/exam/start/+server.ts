@@ -2,11 +2,21 @@ import { json } from '@sveltejs/kit';
 import { dbClient, getCertMeta } from '$lib/server/db';
 import { sampleExamQuestions } from '$lib/server/examSampler';
 import { shuffle } from '$lib/shuffle';
+import { DEFAULT_CERT_CODE } from '$lib/constants';
 import type { QuestionPublic } from '$lib/types';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async () => {
-	const { certification, domains } = await getCertMeta();
+interface RequestBody {
+	cert?: unknown;
+}
+
+export const POST: RequestHandler = async ({ request }) => {
+	// Body is optional — CCDV-F's exam-start call may not send one; absent/empty falls back to
+	// the default cert, same as before this endpoint accepted a cert param at all.
+	const body = (await request.json().catch(() => ({}))) as RequestBody;
+	const certCode = typeof body.cert === 'string' ? body.cert : DEFAULT_CERT_CODE;
+
+	const { certification, domains } = await getCertMeta(certCode);
 	const sampled = await sampleExamQuestions(dbClient, certification, domains);
 
 	// Field-level allowlist: is_correct/reasoning/sortOrder are never selected into this shape

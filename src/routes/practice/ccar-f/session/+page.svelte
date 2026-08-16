@@ -22,7 +22,7 @@
 			browser &&
 			(!practiceState.session || practiceState.session.certCode !== data.certification.code)
 		)
-			goto(resolve('/practice/ccdv-f'));
+			goto(resolve('/practice/ccar-f'));
 	});
 
 	const session = $derived(practiceState.session);

@@ -2,10 +2,12 @@ import { json, error } from '@sveltejs/kit';
 import { dbClient, getCertMeta } from '$lib/server/db';
 import { getQuestionsByIds } from '$lib/server/queries';
 import { buildDomainBreakdown, buildGradedQuestion, buildOverallScore } from '$lib/scoring';
+import { DEFAULT_CERT_CODE } from '$lib/constants';
 import type { ExamAttempt } from '$lib/types';
 import type { RequestHandler } from './$types';
 
 interface RequestBody {
+	cert?: unknown;
 	attemptId?: unknown;
 	startedAt?: unknown;
 	durationMinutes?: unknown;
@@ -20,10 +22,11 @@ export const POST: RequestHandler = async ({ request }) => {
 		throw error(400, 'Malformed exam submission');
 	}
 
+	const certCode = typeof body.cert === 'string' ? body.cert : DEFAULT_CERT_CODE;
 	const questionIds = body.questionIds.filter((id): id is number => typeof id === 'number');
 	const answers = (body.answers ?? {}) as Record<string, number[]>;
 
-	const { certification, domains } = await getCertMeta();
+	const { certification, domains } = await getCertMeta(certCode);
 
 	// Fetches only the exact question ids being graded (the ~53 the client says it was
 	// shown), never the whole bank. Server re-derives correctness from its own DB for each

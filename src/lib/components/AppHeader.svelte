@@ -17,12 +17,13 @@
 	let examGroupOpen = $state(false);
 	let notesGroupOpen = $state(false);
 
-	// Practice/Mock Exam are still CCDV-F-only with CCAR-F as a disabled "Coming soon" entry (no
-	// question bank exists for CCAR-F yet). Study Notes now has real CCAR-F content/routes too.
+	// Practice, Mock Exam, and Study Notes all have real CCDV-F and CCAR-F entries.
 	const homeHref = resolve('/');
 	const historyHref = resolve('/history');
 	const practiceHref = resolve('/practice/ccdv-f');
+	const practiceCcarHref = resolve('/practice/ccar-f');
 	const examHref = resolve('/exam/ccdv-f');
+	const examCcarHref = resolve('/exam/ccar-f');
 	const notesHref = resolve('/notes/ccdv-f');
 	const notesCcarHref = resolve('/notes/ccar-f');
 
@@ -78,10 +79,9 @@
 						<a href={practiceHref} role="menuitem" onclick={() => (openDropdown = null)}>
 							CCDV-F
 						</a>
-						<span class="disabled-item" role="menuitem" aria-disabled="true">
-							<span class="label">CCAR-F</span>
-							<span class="badge">Coming soon</span>
-						</span>
+						<a href={practiceCcarHref} role="menuitem" onclick={() => (openDropdown = null)}>
+							CCAR-F
+						</a>
 					</div>
 				{/if}
 			</div>
@@ -100,10 +100,7 @@
 				{#if openDropdown === 'exam'}
 					<div class="dropdown group-dropdown" role="menu">
 						<a href={examHref} role="menuitem" onclick={() => (openDropdown = null)}>CCDV-F</a>
-						<span class="disabled-item" role="menuitem" aria-disabled="true">
-							<span class="label">CCAR-F</span>
-							<span class="badge">Coming soon</span>
-						</span>
+						<a href={examCcarHref} role="menuitem" onclick={() => (openDropdown = null)}>CCAR-F</a>
 					</div>
 				{/if}
 			</div>
@@ -182,10 +179,15 @@
 								>
 									CCDV-F
 								</a>
-								<span class="disabled-item group-sub-link" role="menuitem" aria-disabled="true">
-									<span class="label">CCAR-F</span>
-									<span class="badge">Coming soon</span>
-								</span>
+								<a
+									href={practiceCcarHref}
+									class="group-sub-link"
+									class:active={isPracticeActive()}
+									role="menuitem"
+									onclick={() => (menuOpen = false)}
+								>
+									CCAR-F
+								</a>
 							{/if}
 
 							<button
@@ -212,10 +214,15 @@
 								>
 									CCDV-F
 								</a>
-								<span class="disabled-item group-sub-link" role="menuitem" aria-disabled="true">
-									<span class="label">CCAR-F</span>
-									<span class="badge">Coming soon</span>
-								</span>
+								<a
+									href={examCcarHref}
+									class="group-sub-link"
+									class:active={isExamActive()}
+									role="menuitem"
+									onclick={() => (menuOpen = false)}
+								>
+									CCAR-F
+								</a>
 							{/if}
 
 							<a
@@ -423,34 +430,6 @@
 
 	.group-dropdown a:hover {
 		background: var(--surface-hover);
-	}
-
-	.disabled-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-2);
-		padding: var(--space-2) var(--space-3);
-		border-radius: var(--radius-sm);
-		font-size: 0.88rem;
-		color: var(--text-muted);
-		opacity: 0.55;
-		cursor: not-allowed;
-		white-space: nowrap;
-	}
-
-	.disabled-item .label {
-		white-space: nowrap;
-	}
-
-	.badge {
-		font-size: 0.68rem;
-		font-weight: 600;
-		padding: 1px var(--space-2);
-		border-radius: var(--radius-sm);
-		background: var(--surface-hover);
-		color: var(--text-muted);
-		white-space: nowrap;
 	}
 
 	.mobile-group-toggle {

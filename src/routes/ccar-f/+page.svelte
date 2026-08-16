@@ -48,13 +48,13 @@
 {/if}
 
 <section class="modes">
-	<a class="mode-card" href={resolve('/notes/ccdv-f')}>
+	<a class="mode-card" href={resolve('/notes/ccar-f')}>
 		<div class="icon"><NotebookText size={22} strokeWidth={1.75} /></div>
 		<h2>Study Notes</h2>
 		<p>A full domain-by-domain reference to read or cram from before you practice.</p>
 	</a>
 
-	<a class="mode-card" href={resolve('/practice/ccdv-f')}>
+	<a class="mode-card" href={resolve('/practice/ccar-f')}>
 		<div class="icon"><BookOpen size={22} strokeWidth={1.75} /></div>
 		<h2>Practice Mode</h2>
 		<p>
@@ -63,7 +63,7 @@
 		</p>
 	</a>
 
-	<a class="mode-card" href={resolve('/exam/ccdv-f')}>
+	<a class="mode-card" href={resolve('/exam/ccar-f')}>
 		<div class="icon"><GraduationCap size={22} strokeWidth={1.75} /></div>
 		<h2>Mock Exam</h2>
 		<p>

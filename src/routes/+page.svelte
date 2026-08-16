@@ -17,19 +17,21 @@
 <section class="certs">
 	<a class="cert-card" href={resolve('/ccdv-f')}>
 		<div class="icon"><GraduationCap size={22} strokeWidth={1.75} /></div>
-		<h2>{data.certification.name}</h2>
+		<h2>{data.ccdvf.name}</h2>
 		<p>
-			{data.certification.examQuestionCount} questions, {data.certification.examDurationMinutes}
-			minutes. Study notes, practice mode, and a full timed mock exam.
+			{data.ccdvf.examQuestionCount} questions, {data.ccdvf.examDurationMinutes} minutes. Study notes,
+			practice mode, and a full timed mock exam.
 		</p>
 	</a>
 
-	<div class="cert-card disabled">
-		<span class="badge">Coming soon</span>
+	<a class="cert-card" href={resolve('/ccar-f')}>
 		<div class="icon"><GraduationCap size={22} strokeWidth={1.75} /></div>
-		<h2>Claude Certified Architect (CCAR-F)</h2>
-		<p>Not yet available.</p>
-	</div>
+		<h2>{data.ccarf.name}</h2>
+		<p>
+			{data.ccarf.examQuestionCount} questions, {data.ccarf.examDurationMinutes} minutes. Study notes,
+			practice mode, and a full timed mock exam.
+		</p>
+	</a>
 </section>
 
 <style>
@@ -72,23 +74,6 @@
 		box-shadow: var(--shadow-sm);
 	}
 
-	.cert-card.disabled {
-		color: var(--text-muted);
-		cursor: default;
-	}
-
-	.badge {
-		position: absolute;
-		top: var(--space-4);
-		right: var(--space-4);
-		font-size: 0.72rem;
-		font-weight: 600;
-		padding: var(--space-1) var(--space-2);
-		border-radius: var(--radius-sm);
-		background: var(--surface-hover);
-		color: var(--text-secondary);
-	}
-
 	.icon {
 		width: 40px;
 		height: 40px;
@@ -101,11 +86,6 @@
 		margin-bottom: var(--space-3);
 	}
 
-	.cert-card.disabled .icon {
-		background: var(--surface-hover);
-		color: var(--text-muted);
-	}
-
 	.cert-card h2 {
 		font-size: 1.05rem;
 		margin-bottom: var(--space-2);
@@ -114,9 +94,5 @@
 	.cert-card p {
 		font-size: 0.88rem;
 		color: var(--text-secondary);
-	}
-
-	.cert-card.disabled p {
-		color: var(--text-muted);
 	}
 </style>

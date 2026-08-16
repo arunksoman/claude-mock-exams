@@ -11,10 +11,13 @@ export interface CertMeta {
 
 export const dbClient = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
 
-let metaPromise: Promise<CertMeta> | null = null;
+// Keyed by certCode — the app now serves more than one certification (CCDV-F, CCAR-F), so a
+// single unkeyed promise would let whichever cert loads first in a given server process poison
+// the cache for every other cert's requests.
+const metaPromises = new Map<string, Promise<CertMeta>>();
 
 /**
- * Cheap fetch (certification row + 8 domain rows) — used by the root layout, which runs on
+ * Cheap fetch (certification row + domain rows) — used by the root layout, which runs on
  * every page load/navigation, and by anything else that just needs cert/domain metadata.
  *
  * Nothing in this app loads the full question bank into memory: practice sampling
@@ -25,13 +28,15 @@ let metaPromise: Promise<CertMeta> | null = null;
  * it doesn't grow as more questions are added later.
  */
 export function getCertMeta(certCode: string = DEFAULT_CERT_CODE): Promise<CertMeta> {
-	if (!metaPromise) {
-		metaPromise = loadCertMeta(certCode).catch((err) => {
-			metaPromise = null;
+	let promise = metaPromises.get(certCode);
+	if (!promise) {
+		promise = loadCertMeta(certCode).catch((err) => {
+			metaPromises.delete(certCode);
 			throw err;
 		});
+		metaPromises.set(certCode, promise);
 	}
-	return metaPromise;
+	return promise;
 }
 
 async function loadCertMeta(certCode: string): Promise<CertMeta> {

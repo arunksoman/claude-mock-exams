@@ -24,7 +24,7 @@
 
 	$effect(() => {
 		if (browser && (!examState.session || examState.session.certCode !== data.certification.code))
-			goto(resolve('/exam/ccdv-f'));
+			goto(resolve('/exam/ccar-f'));
 	});
 
 	const session = $derived(examState.session);

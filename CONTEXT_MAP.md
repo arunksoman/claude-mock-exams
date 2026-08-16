@@ -32,10 +32,11 @@ claude_certification/
 │   └── rebalance_difficulty.py  # redistributes difficulty labels directly in the db (not the JSONL)
 ├── src/
 │   ├── routes/
-│   │   ├── +page.svelte             # cert picker: CCDV-F (live) / CCAR-F ("Coming soon", disabled)
+│   │   ├── +page.svelte             # cert picker — real live cards for both CCDV-F and CCAR-F
 │   │   ├── ccdv-f/+page.svelte       # CCDV-F hub — Study Notes / Practice / Mock Exam cards + attempt stats
-│   │   ├── practice/ccdv-f/          # +page.svelte (setup) + session/+page.svelte
-│   │   ├── exam/ccdv-f/              # +page.svelte (setup/resume) + active/+page.svelte
+│   │   ├── ccar-f/+page.svelte       # CCAR-F hub — same shape, own +page.server.ts (getCertMeta('CCAR-F'))
+│   │   ├── practice/ccdv-f/, practice/ccar-f/   # +page.svelte (setup) + session/+page.svelte each
+│   │   ├── exam/ccdv-f/, exam/ccar-f/           # +page.svelte (setup/resume) + active/+page.svelte each
 │   │   ├── history/, history/[id]/
 │   │   ├── notes/ccdv-f/             # +layout.svelte (sidebar/scrollspy), +page.svelte (overview), [code]/
 │   │   ├── admin/
@@ -208,7 +209,7 @@ python scripts/rebalance_difficulty.py  # re-apply difficulty relabeling after a
     frees up its slot in `selectCount`, so you can pick a replacement: no
     special-casing needed since the guard is per-choice-id, not per-mode.
   - Persisted per-question in session state — `struck: Record<number,
-    number[]>` on both `PracticeInProgress` and `ExamInProgress`
+number[]>` on both `PracticeInProgress` and `ExamInProgress`
     (`$lib/types.ts`), with `togglePracticeStrike`/`toggleExamStrike`
     mutators in the respective `$lib/state/*.svelte.ts` modules — so
     navigating away (Previous/Next, the exam's question-nav grid) and back
@@ -217,8 +218,8 @@ python scripts/rebalance_difficulty.py  # re-apply difficulty relabeling after a
     key since it's pure client-side UI state.
   - **Svelte 5 effect-loop gotcha hit while building this** — worth knowing
     before touching `initPracticeSession()`/`initExam()` again: adding a
-    migration guard that *read* `practiceState.session`/`examState.session`
-    right after *reassigning* it, inside the same function (called from the
+    migration guard that _read_ `practiceState.session`/`examState.session`
+    right after _reassigning_ it, inside the same function (called from the
     root layout's mount `$effect`), made that effect implicitly depend on
     the session object. Since `readJSON()` returns a fresh object reference
     on every call, each re-run reassigned the session and immediately
@@ -234,14 +235,14 @@ python scripts/rebalance_difficulty.py  # re-apply difficulty relabeling after a
   - **Same bug family, different shape — a race, not a loop**: submitting a
     mock exam was auto-exiting back to `/exam/ccdv-f` instead of showing
     results. Root cause: `completeExam()` used to null `examState.session`
-    *before* the page navigated to `/history/[id]`; the active exam page's
+    _before_ the page navigated to `/history/[id]`; the active exam page's
     own guard effect (`if (!examState.session) goto('/exam/ccdv-f')`) fired
     on that write and raced the explicit navigation — sometimes winning.
     Fixed by splitting `completeExam()` (adds to history only) from a new
     `clearExamSession()` (nulls the session), and calling `clearExamSession()`
-    only *after* `goto()` to the results page has resolved — the guard
+    only _after_ `goto()` to the results page has resolved — the guard
     effect never fires while still on the page. General lesson: a guard
-    effect keyed on "session went null" can't distinguish *why* it went
+    effect keyed on "session went null" can't distinguish _why_ it went
     null (user abandoned vs. just-completed-and-navigating-away) unless the
     caller controls the ordering explicitly.
 - **Reveal correctness scoping** (`ChoiceReview.svelte`): a `revealAll` prop
@@ -326,7 +327,7 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   `setInterval`; auto-submits via an `ontimeup` callback when it hits zero.
 - **Fullscreen distraction-free mode** (`FullscreenToggle.svelte`, reused by
   both exam mode and Study Notes): uses `<svelte:document
-  bind:fullscreenElement>` — Svelte 5's native readonly binding for that
+bind:fullscreenElement>` — Svelte 5's native readonly binding for that
   property — instead of manually wiring a `fullscreenchange` listener.
   Escape-to-exit is native browser behavior and isn't intercepted. Whatever
   element is passed as `target` must wrap everything that should stay
@@ -377,8 +378,8 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
   than that (e.g. a long Study Notes page) has an unpainted gap below the
   fold showing the browser's own dark-canvas fill instead of the theme
   color. The equally natural-looking fix, swapping to `min-height: 100%`,
-  is *also* broken: percentage `min-height` needs the parent (`html`/`body`)
-  to have a *definite* height, which `height: auto` (even with a min-height
+  is _also_ broken: percentage `min-height` needs the parent (`html`/`body`)
+  to have a _definite_ height, which `height: auto` (even with a min-height
   floor) doesn't reliably provide across browsers — short pages then
   shrink-wrap to content instead of filling the viewport, same unpainted-gap
   symptom in the opposite direction. The actual fix: `.app-shell` uses
@@ -389,16 +390,16 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
 - **Design tokens** (`app.css` `:root`): `--accent` is Dodger Blue
   (`#1e90ff` light theme, `#5aabff` dark — lightened for dark-bg contrast,
   same pattern the previous green followed). `--success`/`--success-soft`
-  are deliberately a *separate* green family (the "correct answer"
+  are deliberately a _separate_ green family (the "correct answer"
   indicator) and were not touched when the accent changed — don't conflate
   the two if asked to retheme again. `--radius-sm/md/lg` are all `0`
   (square-corners design decision) — since every card/panel/input/table in
   the app reads from these three tokens, redefining them at the root is
   the one-edit way to reach "everywhere"; only a handful of components use
-  a *literal* radius instead of the tokens (pill-shaped chips/progress-bar
+  a _literal_ radius instead of the tokens (pill-shaped chips/progress-bar
   tracks — zeroed individually — and genuine circles: the radio-dot
   indicator, strike-button, and confirm-dialog icon, all `border-radius:
-  50%`, deliberately left alone since those are circles by design, not
+50%`, deliberately left alone since those are circles by design, not
   "rounded corners"). `button { border-radius: 0 !important }` also exists
   as a global override, because component-level button classes (`.primary`,
   `.chip`, ...) set their own `border-radius` on a class selector, which
@@ -407,30 +408,71 @@ ORDER BY RANDOM() LIMIT n` (filters are optional, applied only if the
 
 ## Multi-certification routing & navigation
 
-`/` is a cert picker (CCDV-F card links to `/ccdv-f`; CCAR-F is a static,
-disabled card with a "Coming soon" badge — no backing data since nothing
-exists for it in the DB). `/ccdv-f` is the hub: Study Notes / Practice /
-Mock Exam cards. Practice, exam, and notes routes are each namespaced under
-a `ccdv-f` path segment (`/practice/ccdv-f`, `/exam/ccdv-f`,
-`/notes/ccdv-f`) precisely so a future CCAR-F gets sibling routes
-(`/practice/ccar-f`, ...) rather than a restructure — this was applied
-retroactively (notes first, then practice/exam) once the pattern proved out.
-CCAR-F has zero `certifications`/`domains` rows in the DB today (no question
-bank exists), so Practice and Mock Exam are still CCDV-F-only — that's a
-content/seeding task, not a routing one. **Study Notes is the exception**:
-`/notes/ccar-f` is live (see "Study Notes" below) since notes are static,
-repo-authored content with no DB dependency — it didn't need to wait on a
-question bank the way Practice/Exam do.
+`/` is a cert picker with real, live cards for both certs (CCDV-F links to
+`/ccdv-f`, CCAR-F links to `/ccar-f`) — the home route now has its own
+`+page.server.ts` calling `getCertMeta('CCDV-F')` and `getCertMeta('CCAR-F')`
+explicitly (`Promise.all`), since the root layout only ever supplies the
+default cert. `/ccdv-f` and `/ccar-f` are each a hub: Study Notes / Practice
+/ Mock Exam cards. Practice, exam, and notes routes are each namespaced
+under a per-cert path segment (`/practice/ccdv-f`, `/practice/ccar-f`,
+`/exam/ccdv-f`, `/exam/ccar-f`, `/notes/ccdv-f`, `/notes/ccar-f`) — the
+CCAR-F question bank was seeded and Practice/Mock Exam went live for it as a
+content/seeding + routing follow-up once the CCDV-F-only pattern had proved
+out (notes first, then practice/exam, then CCAR-F's own sibling routes).
 
-- **Header dropdowns** (`AppHeader.svelte`): Practice and Mock Exam are each
-  a dropdown (desktop, one open at a time via a single `openDropdown` state)
-  / independently-collapsible group (mobile) with a CCDV-F link plus a
-  disabled "Coming soon" CCAR-F entry. **Study Notes now links both** —
-  CCDV-F and CCAR-F are both real `<a>` links, not one live + one disabled.
+- **Root layout only loads the default cert.** `src/routes/+layout.server.ts`
+  calls `getCertMeta()` with no argument (defaults to `DEFAULT_CERT_CODE` =
+  `'CCDV-F'`), so any CCAR-F-namespaced route branch needs its own server
+  load overriding that data — see `src/routes/ccar-f/+page.server.ts`,
+  `src/routes/practice/ccar-f/+layout.server.ts`, and
+  `src/routes/exam/ccar-f/+layout.server.ts`, each calling
+  `getCertMeta('CCAR-F')`. SvelteKit merges a child load's return value over
+  the parent's by key, so this correctly overrides `certification`/`domains`
+  for everything under that branch without touching the CCDV-F routes.
+- **`getCertMeta` is keyed by cert code**, not a single unkeyed singleton —
+  it caches one promise per `certCode` in a `Map` (`$lib/server/db.ts`).
+  Before CCAR-F went live this was a single `Promise | null`, which would
+  have silently poisoned the cache with whichever cert's data loaded first
+  in a given server process once two certs were both real. Keep it keyed if
+  a third cert is ever added.
+- **`/api/practice/start`, `/api/exam/start`, `/api/exam/submit`** all now
+  accept an optional `cert` field in the POST body (defaults to
+  `DEFAULT_CERT_CODE` if absent, so old clients/callers still work) and pass
+  it through to `getCertMeta(certCode)`. Every CCDV-F/CCAR-F page that calls
+  these sends its own `data.certification.code` explicitly — don't rely on
+  the server-side default once more than one cert can reach these endpoints.
+- **`ExamInProgress` carries `certCode`** (added alongside the pre-existing
+  `PracticeInProgress.certCode`) so the resumable in-progress exam session
+  knows which cert it belongs to; `startExam()` takes `certCode` as part of
+  its payload. Both exam and practice in-progress guards (`session/+page.svelte`,
+  `exam/.../active/+page.svelte`) check `session.certCode === data.certification.code`
+  before treating a stored session as valid for the current page — without
+  this, navigating to the other cert's practice/exam route while a session
+  for the _first_ cert was in progress would render that cert's questions
+  under the wrong cert's domain/session-page context.
+- **In-progress practice/exam sessions are still a single global localStorage
+  slot each** (`STORAGE_KEYS.practiceInProgress` / `.examInProgress`), not
+  namespaced per cert — starting a new session in one cert while a session
+  for the other cert is in progress still overwrites it, same limitation
+  that existed pre-CCAR-F, just now reachable from either cert's routes. Not
+  fixed as part of enabling CCAR-F; would need per-cert storage keys plus a
+  migration path for existing single-key sessions if this becomes a problem.
+- **Hub-page stats are filtered by cert.** `src/routes/ccdv-f/+page.svelte`
+  and `src/routes/ccar-f/+page.svelte` both derive `attemptsForThisCert`/
+  `examAttempts` by filtering `historyState.attempts` on
+  `a.certCode === data.certification.code` — history itself is one global
+  list across both certs (`$lib/state/history.svelte.ts`), so without this
+  filter a CCAR-F exam score would bleed into the CCDV-F hub's "best exam
+  score" stat and vice versa.
+- **Header dropdowns** (`AppHeader.svelte`): Practice, Mock Exam, and Study
+  Notes are each a dropdown (desktop, one open at a time via a single
+  `openDropdown` state) / independently-collapsible group (mobile) with
+  real CCDV-F and CCAR-F `<a>` links — no disabled/"Coming soon" entries
+  remain anywhere in the header or on the `/` cert picker.
   - **Written as three explicit blocks, not a `{#each groups}` loop** —
     deliberately, after hitting a real `svelte/no-navigation-without-resolve`
     lint failure: the rule can trace a plain top-level `const x =
-    resolve(...)` used directly as `href={x}`, but not the same resolved
+resolve(...)` used directly as `href={x}`, but not the same resolved
     string stored as a property on an array of objects and accessed via a
     loop variable (`href={item.href}`) — too much indirection for its
     static check, even though the value is provably a `resolve()` result at
@@ -515,7 +557,7 @@ routing was namespaced for from the start).
   a `Marked` instance with custom extensions for the syntax above, plus
   custom renderers for `heading` (slug `id`s for anchor links/sidebar
   scrollspy), `code` (mermaid → passthrough `<pre class="mermaid"
-  data-src="...">` for client-side rendering; otherwise `hljs.highlight`
+data-src="...">` for client-side rendering; otherwise `hljs.highlight`
   with the given language, or explicit `'plaintext'` if untagged — **not**
   `hljs.highlightAuto`, which is both slower and prone to mis-guessing a
   language for non-code content like directory trees), `table` (wrapped in
@@ -527,8 +569,8 @@ routing was namespaced for from the start).
   for KaTeX/mermaid/iframe output with no real safety benefit.
   - `getNotesSection(code)` **caches its rendered HTML in a module-scope
     `Map`** — this was a real perf fix, not just a nicety: before caching,
-    the full marked+KaTeX+highlight.js pipeline re-ran on *every single
-    request* to the same page, measured at ~850ms for the largest domain
+    the full marked+KaTeX+highlight.js pipeline re-ran on _every single
+    request_ to the same page, measured at ~850ms for the largest domain
     file; cached, repeat requests on a warm instance dropped to ~20ms. Same
     "module-scope cache, cheap enough" pattern as `getCertMeta()`.
 - **Client-side diagram rendering** (`NotesDomain.svelte`): mermaid is
@@ -648,8 +690,8 @@ upload that previews the whole batch before writing anything.
   HTML — this is the editor, not the exam-delivery surface) is fetched only
   when a row is opened.
 - **Table + virtualization** (`$lib/components/admin/`): `@tanstack/
-  table-core` **v8.21.3** pinned deliberately, not v9 — the docs originally
-  linked were v8's, and v8's Svelte *adapter* package requires Svelte 3/4,
+table-core` **v8.21.3** pinned deliberately, not v9 — the docs originally
+  linked were v8's, and v8's Svelte _adapter_ package requires Svelte 3/4,
   but `table-core` itself (the framework-agnostic engine, no Svelte peer
   dep at all) works fine standalone regardless. v9's `table-core` was
   checked too and rejected: it's a full plugin/feature-composition rewrite
@@ -662,7 +704,7 @@ upload that previews the whole batch before writing anything.
   - **Bare `createTable()` doesn't self-populate per-feature default
     state** the way a framework adapter (`useReactTable` etc.) normally
     does — crashed `getHeaderGroups()` with `Cannot read properties of
-    undefined (reading 'left')` (a column-pinning feature reading state
+undefined (reading 'left')` (a column-pinning feature reading state
     that was never populated). Fix, in `useQuestionsTable.svelte.ts`:
     merge `table.initialState` into the controlled `$state` once right
     after construction, then push it back via one `table.setOptions()` call
@@ -674,7 +716,7 @@ upload that previews the whole batch before writing anything.
     auto-subscription syntax) to call `.setOptions()` on it therefore
     depends on its own output — infinite synchronous loop, froze the tab.
     Fix: grab the instance once via `get(virtualizer)` from `svelte/store`
-    (untracked, plain reference) and call `.setOptions()` on *that*, never
+    (untracked, plain reference) and call `.setOptions()` on _that_, never
     through `$virtualizer` — the template can still read `$virtualizer`
     freely for re-render, since that direction was never the problem.
 - **Panel** (`QuestionPanel.svelte`): a centered modal (`min(900px, 100%)`
@@ -696,14 +738,14 @@ upload that previews the whole batch before writing anything.
   - **A bare `<svg>` icon as the sole child of a flex button can collapse
     to `width: 0`** despite an explicit `width="18"` HTML attribute —
     confirmed via DevTools (`0 × 18` in the computed box, not a guess). Fix:
-    `flex-shrink: 0` on the button *and* on the icon itself via
+    `flex-shrink: 0` on the button _and_ on the icon itself via
     `.icon-btn :global(svg)` (the icon renders inside a child component, so
     it needs an explicit `:global()` to reach past this file's scoped CSS).
 - **Bulk upload — preview then commit, not write-on-upload** (a deliberate
   change from the old behavior): `UploadPreview.svelte` posts the `.jsonl`
   file to `api/preview-upload` (parses + validates via
   `parseAndValidateJsonl()`, returns the batch — **no DB write**) for
-  review, then posts the *same file* again to `api/commit-upload`, which
+  review, then posts the _same file_ again to `api/commit-upload`, which
   re-parses and re-validates from scratch server-side (never trusts a
   client-supplied "already validated" claim) before calling
   `writeValidatedQuestions()` in one transaction. If any line fails
@@ -714,10 +756,10 @@ upload that previews the whole batch before writing anything.
     re-inserted, not accumulated); one without is always inserted as new.
     Topics/tags are get-or-created the same way `import.py` does.
 - **CCAR-F**: the cert selector reads whatever's in the `certifications`
-  table — today that's only CCDV-F. No CCAR-F rows are seeded anywhere;
-  it'll appear in the admin UI automatically once it has real
-  `certifications`/`domains` rows (a content/seeding task, not an
-  admin-tooling one).
+  table — CCAR-F was seeded (`data/ccar-f/_certification.json` + 300+
+  question JSONL files imported via `scripts/import.py`) and appears in the
+  admin UI automatically, same as CCDV-F, with no admin-tooling changes
+  needed (the layer was already `certificationId`-parameterized throughout).
 - **Not built**: column sorting in the table (rows are always `id`-ordered,
   a deliberate scope cut — keyset pagination needs a stable order anyway),
   per-row cherry-picking within a bulk-upload preview (it's commit-all or

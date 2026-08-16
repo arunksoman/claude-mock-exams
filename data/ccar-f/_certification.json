@@ -1,0 +1,47 @@
+{
+	"code": "CCAR-F",
+	"name": "Claude Certified Architect - Foundations",
+	"vendor": "Anthropic",
+	"description": "Validates the ability to make sound architectural decisions for production Claude systems: agentic orchestration and multi-agent coordination, Claude Code configuration and CI/CD workflows, prompt engineering and guaranteed structured output, tool and MCP server design, and context management/reliability at scale. Scenario-anchored: every exam question references one of six production-design scenarios.",
+	"exam_question_count": 60,
+	"exam_duration_minutes": 120,
+	"passing_score": 720,
+	"max_score": 1000,
+	"domains": [
+		{
+			"code": "agentic-architecture",
+			"name": "Agentic Architecture & Orchestration",
+			"weight_percentage": 27,
+			"sort_order": 1,
+			"description": "The agentic loop and stop_reason handling, orchestration pattern selection (prompt chaining, routing, orchestrator-workers, dynamic decomposition, parallel subagents), coordinator/subagent responsibility splits, tool distribution, hooks and prerequisite gates as enforcement, state persistence, and provenance for multi-agent research/extraction systems."
+		},
+		{
+			"code": "claude-code-config",
+			"name": "Claude Code Configuration & Workflows",
+			"weight_percentage": 20,
+			"sort_order": 2,
+			"description": "CLAUDE.md hierarchy and scoping, skills and slash commands, plan mode vs. direct execution, permissions.deny and hooks as enforcement, built-in tool selection, session management and resumption, and CI/CD integration via non-interactive mode."
+		},
+		{
+			"code": "prompt-structured-output",
+			"name": "Prompt Engineering & Structured Output",
+			"weight_percentage": 20,
+			"sort_order": 3,
+			"description": "System prompt design and XML structure, few-shot examples, prompt dilution over long conversations, structured/guaranteed output mechanisms (JSON Schema, strict tool use, tool_choice), schema vs. semantic validation, fabrication reduction in extraction, validation feedback loops, and the Batch API's latency tradeoff."
+		},
+		{
+			"code": "tool-design-mcp",
+			"name": "Tool Design & MCP Integration",
+			"weight_percentage": 18,
+			"sort_order": 4,
+			"description": "Tool description design and routing reliability, parameter and output design patterns, composite-tool rules, error classification and structured tool-error results, MCP error tiers, MCP's tools/resources/prompts building blocks, MCP configuration scoping and precedence, and progressive tool availability."
+		},
+		{
+			"code": "context-management-reliability",
+			"name": "Context Management & Reliability",
+			"weight_percentage": 15,
+			"sort_order": 5,
+			"description": "The stateless-core principle, context-shrinking strategies, the lost-in-the-middle effect, escalation patterns and structured handoffs, error propagation between agents, confidence calibration, information provenance, graceful degradation, and code-level compliance enforcement."
+		}
+	]
+}
